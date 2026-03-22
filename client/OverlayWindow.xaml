@@ -1,0 +1,105 @@
+<Window x:Class="CodeExplainer.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Explanation"
+        Width="480" Height="320"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        ResizeMode="NoResize">
+
+    <Border Background="#E8202020"
+            CornerRadius="12"
+            BorderBrush="#40FFFFFF"
+            BorderThickness="1"
+            Margin="8"
+            Padding="16">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="20"
+                              ShadowDepth="4"
+                              Opacity="0.5"
+                              Color="Black"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0" Margin="0,0,0,10">
+                <TextBlock Text="✦ Code Explainer"
+                           Foreground="#B0FFFFFF"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+
+                <TextBlock x:Name="CaseLabel"
+                           Foreground="#80FFFFFF"
+                           FontSize="10"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- Separator -->
+            <Rectangle Grid.Row="0"
+                       Height="1"
+                       Fill="#20FFFFFF"
+                       VerticalAlignment="Bottom"/>
+
+            <!-- Content area -->
+            <Grid Grid.Row="1">
+                <!-- Loading spinner -->
+                <StackPanel x:Name="LoadingPanel"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            Visibility="Visible">
+                    <TextBlock Text="⏳"
+                               FontSize="24"
+                               HorizontalAlignment="Center"
+                               Foreground="White">
+                        <TextBlock.RenderTransform>
+                            <RotateTransform x:Name="SpinnerRotation" CenterX="12" CenterY="12"/>
+                        </TextBlock.RenderTransform>
+                        <TextBlock.Triggers>
+                            <EventTrigger RoutedEvent="Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="SpinnerRotation"
+                                            Storyboard.TargetProperty="Angle"
+                                            From="0" To="360"
+                                            Duration="0:0:1.5"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </TextBlock.Triggers>
+                    </TextBlock>
+                    <TextBlock Text="Thinking..."
+                               Foreground="#80FFFFFF"
+                               FontSize="12"
+                               HorizontalAlignment="Center"
+                               Margin="0,8,0,0"/>
+                </StackPanel>
+
+                <!-- Streaming text output -->
+                <ScrollViewer x:Name="ContentScroller"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Visibility="Collapsed">
+                    <TextBlock x:Name="ResponseText"
+                               Foreground="#EEFFFFFF"
+                               FontSize="13"
+                               FontFamily="Segoe UI, Inter"
+                               LineHeight="20"
+                               TextWrapping="Wrap"
+                               Padding="4"/>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

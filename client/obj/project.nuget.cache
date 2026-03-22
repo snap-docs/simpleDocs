@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "bMndqaoEMaA=",
+  "success": true,
+  "projectFilePath": "D:\\PROJECTS\\Startup\\prototype1\\client\\CodeExplainer.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\thano\\.nuget\\packages\\inputsimulatorcore\\1.0.5\\inputsimulatorcore.1.0.5.nupkg.sha512"
+  ],
+  "logs": []
+}

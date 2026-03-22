@@ -1,0 +1,21 @@
+{
+  "name": "code-explainer-backend",
+  "version": "1.0.0",
+  "description": "Code Explainer backend — Hono + OpenRouter + Supabase",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "hono": "^4.4.0",
+    "@hono/node-server": "^1.11.0",
+    "@hono/node-ws": "^1.0.0",
+    "@supabase/supabase-js": "^2.43.0",
+    "jsonwebtoken": "^9.0.2",
+    "dotenv": "^16.4.5",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {}
+}
