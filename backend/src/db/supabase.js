@@ -42,12 +42,12 @@ function getClient() {
  * 
  * @param {Object} params
  * @param {number} params.caseType - 1-4
- * @param {string} params.appType - editor, browser, terminal, unknown
+ * @param {string} params.environmentType - ide, browser, classic_terminal, modern_terminal, external, unknown
  * @param {number} params.responseTimeMs
  * @param {string} params.modelUsed
  * @param {boolean} params.fallbackUsed
  */
-export async function logInteraction({ caseType, appType, responseTimeMs, modelUsed, fallbackUsed }) {
+export async function logInteraction({ caseType, environmentType, responseTimeMs, modelUsed, fallbackUsed }) {
   const client = getClient();
   if (!client) return;
 
@@ -56,7 +56,7 @@ export async function logInteraction({ caseType, appType, responseTimeMs, modelU
       .from('interactions')
       .insert({
         case_type: caseType,
-        app_type: appType,
+        app_type: environmentType,
         response_time_ms: responseTimeMs,
         model_used: modelUsed,
         fallback_used: fallbackUsed

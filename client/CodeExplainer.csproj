@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
@@ -12,6 +12,14 @@
 
   <ItemGroup>
     <PackageReference Include="InputSimulatorCore" Version="1.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude alternate build artifact folders from wildcard compile items. -->
+    <Compile Remove="obj_*/**/*.cs" />
+    <EmbeddedResource Remove="obj_*/**/*" />
+    <None Remove="obj_*/**/*" />
+    <Page Remove="obj_*/**/*" />
   </ItemGroup>
 
 </Project>

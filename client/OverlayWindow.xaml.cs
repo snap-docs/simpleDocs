@@ -38,22 +38,19 @@ namespace CodeExplainer
         /// <summary>
         /// Shows the overlay in loading state near the current mouse position.
         /// </summary>
-        public void ShowLoading()
+        public void ShowLoading(string statusLabel = "")
         {
             Dispatcher.Invoke(() =>
             {
-                // Clear previous content
                 ResponseText.Text = "";
-                CaseLabel.Text = "";
+                CaseLabel.Text = statusLabel;
                 LoadingPanel.Visibility = Visibility.Visible;
                 ContentScroller.Visibility = Visibility.Collapsed;
 
-                // Position near mouse cursor
                 var mousePos = GetMousePosition();
                 Left = mousePos.X + 20;
                 Top = mousePos.Y + 20;
 
-                // Keep within screen bounds
                 var screen = SystemParameters.WorkArea;
                 if (Left + Width > screen.Right)
                     Left = screen.Right - Width - 20;
@@ -83,9 +80,15 @@ namespace CodeExplainer
                 }
 
                 ResponseText.Text += token;
-
-                // Auto-scroll to bottom
                 ContentScroller.ScrollToEnd();
+            });
+        }
+
+        public void SetStatus(string status)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                CaseLabel.Text = status;
             });
         }
 
@@ -97,6 +100,17 @@ namespace CodeExplainer
             Dispatcher.Invoke(() =>
             {
                 CaseLabel.Text = "✓ Done";
+            });
+        }
+
+        public void ShowMessage(string message, string statusLabel)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                ShowLoading(statusLabel);
+                LoadingPanel.Visibility = Visibility.Collapsed;
+                ContentScroller.Visibility = Visibility.Visible;
+                ResponseText.Text = message;
             });
         }
 

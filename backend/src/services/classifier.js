@@ -72,37 +72,67 @@ const CODE_PATTERNS = [
   /^\s*<\/?[a-zA-Z][\w-]*.*>/m        // HTML/JSX tags
 ];
 
+function score(text, patterns) {
+  return patterns.reduce((total, pattern) => total + (pattern.test(text) ? 1 : 0), 0);
+}
+
+function buildContextBlob(selectedText, backgroundContext) {
+  const background = typeof backgroundContext === 'string' ? backgroundContext.trim() : '';
+  if (background.length === 0 || background === selectedText) {
+    return '';
+  }
+
+  return background.substring(0, 12000);
+}
+
+function isFragmentarySelection(text) {
+  if (text.length <= 80) {
+    return true;
+  }
+
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return words <= 12;
+}
+
 /**
  * Classify selected text into one of 4 cases.
- * @param {string} text - The selected text to classify
+ * @param {string} selectedText - The selected text to classify
+ * @param {string} backgroundContext - Optional surrounding context
  * @returns {number} Case number 1-4
  */
-export function classify(text) {
-  if (!text || typeof text !== 'string') return 4;
+export function classify(selectedText, backgroundContext = '') {
+  if (!selectedText || typeof selectedText !== 'string') return 4;
 
-  const trimmed = text.trim();
+  const trimmed = selectedText.trim();
   if (trimmed.length === 0) return 4;
 
   // Priority 1: Error detection — always wins
-  const errorScore = ERROR_PATTERNS.reduce((score, pattern) => {
-    return score + (pattern.test(trimmed) ? 1 : 0);
-  }, 0);
-
-  if (errorScore >= 1) return 2;
+  const selectedErrorScore = score(trimmed, ERROR_PATTERNS);
+  if (selectedErrorScore >= 1) return 2;
 
   // Priority 2: Terminal content
-  const terminalScore = TERMINAL_PATTERNS.reduce((score, pattern) => {
-    return score + (pattern.test(trimmed) ? 1 : 0);
-  }, 0);
-
-  if (terminalScore >= 1) return 3;
+  const selectedTerminalScore = score(trimmed, TERMINAL_PATTERNS);
+  if (selectedTerminalScore >= 1) return 3;
 
   // Priority 3: Source code
-  const codeScore = CODE_PATTERNS.reduce((score, pattern) => {
-    return score + (pattern.test(trimmed) ? 1 : 0);
-  }, 0);
+  const selectedCodeScore = score(trimmed, CODE_PATTERNS);
+  if (selectedCodeScore >= 2) return 1; // Need at least 2 code signals to be confident
 
-  if (codeScore >= 2) return 1;  // Need at least 2 code signals to be confident
+  // Context fallback: if the selected snippet is short/fragmentary, use background context
+  // as a tie-breaker instead of defaulting straight to Case 4.
+  if (isFragmentarySelection(trimmed)) {
+    const contextBlob = buildContextBlob(trimmed, backgroundContext);
+    if (contextBlob.length > 0) {
+      const contextErrorScore = score(contextBlob, ERROR_PATTERNS);
+      if (contextErrorScore >= 1) return 2;
+
+      const contextTerminalScore = score(contextBlob, TERMINAL_PATTERNS);
+      if (contextTerminalScore >= 1) return 3;
+
+      const contextCodeScore = score(contextBlob, CODE_PATTERNS);
+      if (contextCodeScore >= 2) return 1;
+    }
+  }
 
   // Priority 4: Everything else
   return 4;

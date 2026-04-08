@@ -1,0 +1,13 @@
+{
+  "name": "code-explainer-evals",
+  "version": "1.0.0",
+  "description": "Evaluation headless client for Prototype 4",
+  "type": "module",
+  "scripts": {
+    "eval": "node eval_runner.js",
+    "export:live": "node export_live_log_dataset.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

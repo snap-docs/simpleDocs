@@ -1,0 +1,12 @@
+
+[08:38:09] INFO  [Capture] req=12 using_strategy=IDEStrategy
+[08:38:10] INFO  [CaptureSummary] req=12 process=Code title="queryParameter_PathParameter.py - FastAPIProject - Visual St..." env=ide_editor strategy=IDEStrategy selected_method=clipboard_compatibility background_method=uia_textpattern_visible_ranges selected_chars=129 background_chars=1255 is_partial=False is_unsupported=False status="Selected text captured via optional compatibility mode without UIA/MSAA selection signal. Background context captured vi..." duration_ms=1651
+[08:38:10] INFO  [Capture] req=12 process=Code title="queryParameter_PathParameter.py - FastAPIProject - Visual St..." env=ide_editor selected_method=clipboard_compatibility background_method=uia_textpattern_visible_ranges selected_chars=129 background_chars=1255 is_partial=False is_unsupported=False status="Selected text captured via optional compatibility mode without UIA/MSAA selection signal. Background context captured vi..."
+[08:38:10] INFO  [Capture] req=12 Selected preview: @app.get("/show/{id}"); def viewForPath(id:int=Path(ge=0,le=3,regex=r"^[a-zA-Z]+...
+[08:38:10] INFO  [Capture] req=12 Background preview: ￼ ￼ ￼ ￼ ￼   FastAPIProject     ￼ ￼ ￼ ￼ ￼ Welcome   requestBodyValidation...
+[08:38:20] INFO  [Capture] req=13 using_strategy=IDEStrategy
+[08:38:21] INFO  [CaptureSummary] req=13 process=Code title="queryParameter_PathParameter.py - FastAPIProject - Visual St..." env=ide_editor strategy=IDEStrategy selected_method=clipboard_compatibility background_method=uia_textpattern_visible_ranges selected_chars=43 background_chars=1266 is_partial=False is_unsupported=False status="Selected text captured via optional compatibility mode without UIA/MSAA selection signal. Background context captured vi..." duration_ms=1603
+[08:38:21] INFO  [Capture] req=13 process=Code title="queryParameter_PathParameter.py - FastAPIProject - Visual St..." env=ide_editor selected_method=clipboard_compatibility background_method=uia_textpattern_visible_ranges selected_chars=43 background_chars=1266 is_partial=False is_unsupported=False status="Selected text captured via optional compatibility mode without UIA/MSAA selection signal. Background context captured vi..."
+[08:38:21] INFO  [Capture] req=13 Selected preview: def viewForQuery(id:int = Query(ge=0,le=4),
+[08:38:21] INFO  [Capture] req=13 Background preview: ￼ ￼ ￼ ￼ ￼   FastAPIProject     ￼ ￼ ￼ ￼ ￼ Welcome   requestBodyValidation...
+

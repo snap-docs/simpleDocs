@@ -1,0 +1,89 @@
+using System.Threading.Tasks;
+using CodeExplainer.Engine.Models;
+
+namespace CodeExplainer.Engine.Strategies
+{
+    public class BrowserStrategy : ICaptureStrategy
+    {
+        private readonly ClipboardCompatibilityMode _compatibilityMode;
+
+        public BrowserStrategy(ClipboardCompatibilityMode compatibilityMode)
+        {
+            _compatibilityMode = compatibilityMode;
+        }
+
+        public async Task<CaptureResult> CaptureAsync(ActiveWindowInfo window)
+        {
+            CapturePipelines.SelectedCaptureOutcome selected = await CapturePipelines.CaptureSelectedTextAsync(
+                window,
+                _compatibilityMode,
+                preferMsaaFirst: false);
+
+            CapturePipelines.BackgroundCaptureOutcome background = await CapturePipelines.CaptureBrowserContainerBackground(
+                window,
+                maxChars: 3000);
+
+            // Echo detection: UIA/MSAA often returns just the selected text as "container" text
+            // in canvas-based apps (Google Docs). If background == selected, it's not useful context.
+            if (background.Method != CaptureMethod.OcrVisualCapture
+                && !string.IsNullOrWhiteSpace(selected.Text)
+                && !string.IsNullOrWhiteSpace(background.Text)
+                && string.Equals(background.Text.Trim(), selected.Text.Trim(), System.StringComparison.Ordinal))
+            {
+                RuntimeLog.Info("BrowserStrategy", $"Background echoed selected text for {window.ProcessName}; falling back to OCR.");
+                var ocrText = await OcrCapture.CaptureAsync(window);
+                if (!string.IsNullOrWhiteSpace(ocrText))
+                {
+                    background = new CapturePipelines.BackgroundCaptureOutcome
+                    {
+                        Text = ocrText,
+                        Method = CaptureMethod.OcrVisualCapture,
+                        Status = "Browser background captured via OCR (UIA echoed selected text)."
+                    };
+                }
+            }
+
+            if (!selected.Success)
+            {
+                string status = $"{selected.Status} {background.Status}".Trim();
+                return CaptureResult.Unsupported(
+                    window,
+                    EnvironmentType.BrowserChromium,
+                    selected.Method,
+                    background.Method,
+                    status,
+                    background.Text);
+            }
+
+            bool isPartial = background.IsMetadataFallback;
+            string combinedStatus = $"{selected.Status} {background.Status}".Trim();
+
+            // ── DEBUG: Force OCR on every browser capture to verify OCR pipeline ──────
+            // TEMPORARY - remove after OCR is confirmed working
+            RuntimeLog.Info("OCR_DEBUG", $"Force-running OCR on '{window.Title}' ({window.ProcessName}) for debug.");
+            var debugOcr = await OcrCapture.CaptureWithConfidenceAsync(window, OcrCaptureArea.FullWindow);
+            if (debugOcr.IsUsable(0.0f))
+            {
+                RuntimeLog.Info("OCR_DEBUG", $"OCR result: confidence={debugOcr.Confidence:F2} chars={debugOcr.Text.Length} area={debugOcr.Area}");
+                RuntimeLog.Info("OCR_DEBUG", $"OCR preview: {debugOcr.Text.Replace('\n',' ').Substring(0, System.Math.Min(120, debugOcr.Text.Length))}");
+            }
+            else
+            {
+                RuntimeLog.Warn("OCR_DEBUG", $"OCR returned empty or below threshold. confidence={debugOcr.Confidence:F2}");
+            }
+            // ── END DEBUG ─────────────────────────────────────────────────────────────
+
+            return new CaptureResult(
+                selectedText: selected.Text,
+                backgroundContext: background.Text,
+                windowTitle: window.Title,
+                processName: window.ProcessName,
+                type: EnvironmentType.BrowserChromium,
+                selectedMethod: selected.Method,
+                backgroundMethod: background.Method,
+                isPartial: isPartial,
+                isUnsupported: false,
+                statusMessage: combinedStatus);
+        }
+    }
+}

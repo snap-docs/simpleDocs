@@ -57,20 +57,41 @@ RULES:
  * Build the prompt messages for OpenRouter.
  * @param {number} caseType - Case 1-4
  * @param {string} selectedText - The highlighted text
- * @param {string} fullContext - The full document/window content
- * @param {string} appType - editor, browser, terminal, unknown
+ * @param {string} backgroundContext - The surrounding context text
+ * @param {string} windowTitle - Foreground window title
+ * @param {string} processName - Foreground process name
+ * @param {string} environmentType - ide_editor, ide_embedded_terminal, browser_chromium, browser_firefox, classic_terminal, modern_terminal, electron, external, unknown
  * @returns {{ systemPrompt: string, userPrompt: string }}
  */
-export function buildPrompt(caseType, selectedText, fullContext, appType) {
+export function buildPrompt(caseType, selectedText, backgroundContext, windowTitle, processName, environmentType, ocrUsed = false, ocrConfidence = 0) {
   const systemPrompt = SYSTEM_PROMPTS[caseType] || SYSTEM_PROMPTS[4];
 
   let userPrompt = '';
+  const hasBackground = backgroundContext && backgroundContext.trim().length > 0 && backgroundContext !== selectedText;
 
-  if (fullContext && fullContext.trim().length > 0 && fullContext !== selectedText) {
-    userPrompt += `FULL CONTEXT (surrounding code/content from the ${appType}):\n\`\`\`\n${fullContext.substring(0, 8000)}\n\`\`\`\n\n`;
+  userPrompt += `[System Logging Metadata - DO NOT explain this to the user unless they ask about it]
+- Environment: ${environmentType}
+- Process: ${processName || 'unknown'}
+- Window Title: ${windowTitle || 'unknown'}\n\n`;
+
+  if (hasBackground) {
+    userPrompt += `BACKGROUND CONTEXT (separate pipeline):\n\`\`\`\n${backgroundContext.substring(0, 10000)}\n\`\`\`\n\n`;
+    userPrompt += "IMPORTANT: Explain the selected text in the context of BACKGROUND CONTEXT above. Use it to disambiguate short snippets.\n\n";
+  } else {
+    userPrompt += "BACKGROUND CONTEXT: not available. Explain the meaning of the SELECTED TEXT as a standalone concept. DO NOT invent connections between the selected text and the System Logging Metadata.\n\n";
   }
 
-  userPrompt += `SELECTED TEXT (the developer highlighted this and wants it explained):\n\`\`\`\n${selectedText}\n\`\`\``;
+  userPrompt += `SELECTED TEXT (the user highlighted this and wants it explained):\n\`\`\`\n${selectedText}\n\`\`\``;
+
+  if (ocrUsed) {
+    const pct = Math.round(ocrConfidence * 100);
+    userPrompt += `\n\n[OCR CAPTURE NOTE] The text above was recovered via visual OCR (screen-read), not direct OS text APIs.`;
+    if (ocrConfidence < 0.75) {
+      userPrompt += ` OCR confidence is ${pct}% — some characters or symbols may be misread. Be conservative and flag any terms that look potentially garbled.`;
+    } else {
+      userPrompt += ` OCR confidence is high (${pct}%). Minor symbol misreads are possible but the content is likely correct.`;
+    }
+  }
 
   return { systemPrompt, userPrompt };
 }

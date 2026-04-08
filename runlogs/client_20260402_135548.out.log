@@ -1,0 +1,20 @@
+[13:55:49] INFO  [App] Startup began.
+[13:55:50] INFO  [App] Hidden message window created.
+[13:55:50] INFO  [App] Tray icon ready.
+[13:55:50] INFO  [Hotkey] Registered Ctrl+Shift+Space.
+[13:55:50] INFO  [Hotkey] Registered Ctrl+Shift+Space.
+[13:55:50] INFO  [App] Overlay window created. App is ready.
+[13:57:48] INFO  [Hotkey] WM_HOTKEY received for Ctrl+Shift+Space.
+[13:57:48] INFO  [Hotkey] Triggered via Ctrl+Shift+Space.
+[13:57:48] INFO  [Window] Foreground process=Code title="App.xaml.cs - prototype3 - Visual Studio Code" class=Chrome_WidgetWin_1 hwnd=328508
+[13:57:48] INFO  [Window] Classified environment as ide.
+[13:57:48] INFO  [Capture] Using strategy IDEStrategy.
+[13:57:48] INFO  [IDE] Falling back to clipboard selection capture.
+[13:57:48] INFO  [Clipboard] Attempting clipboard fallback for Code.
+[13:57:48] WARN  [Clipboard] First clipboard attempt returned empty text. Retrying once.
+[13:57:48] INFO  [Clipboard] Restoring focus to Code before Ctrl+C.
+[13:57:48] WARN  [Clipboard] Clipboard fallback still returned empty text after retry.
+[13:57:48] INFO  [Capture] Result env=ide method=clipboard_selection fallback=True selected=0 visible=0 full=0 unsupported=False partial=True confidence=0.00
+[13:57:48] WARN  [Capture] No selected text was captured.
+[13:57:48] WARN  [Overlay] No selected text was captured from this application.
+[13:57:48] INFO  [Clipboard] Restoring focus to Code before Ctrl+C.

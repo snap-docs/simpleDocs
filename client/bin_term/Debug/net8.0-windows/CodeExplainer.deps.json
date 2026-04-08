@@ -1,0 +1,41 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "CodeExplainer/1.0.0": {
+        "dependencies": {
+          "InputSimulatorCore": "1.0.5"
+        },
+        "runtime": {
+          "CodeExplainer.dll": {}
+        }
+      },
+      "InputSimulatorCore/1.0.5": {
+        "runtime": {
+          "lib/netstandard2.0/WindowsInput.dll": {
+            "assemblyVersion": "1.0.5.0",
+            "fileVersion": "1.0.5.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "CodeExplainer/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "InputSimulatorCore/1.0.5": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-mLYv9geqp8gG0HjvmbhL5+0v8LmGBgawOS3FHRtK0tGYp0VWfLe8lhYYXUH+vZP1Su+0v0HJQjBx5Jy2wbtYBQ==",
+      "path": "inputsimulatorcore/1.0.5",
+      "hashPath": "inputsimulatorcore.1.0.5.nupkg.sha512"
+    }
+  }
+}

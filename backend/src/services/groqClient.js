@@ -22,23 +22,29 @@ export async function* streamCompletion(systemPrompt, userPrompt) {
 
   const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      stream: true,
-      max_tokens: 1024,
-      temperature: 0.3
-    })
-  });
+  let response;
+  try {
+    response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        stream: true,
+        max_tokens: 1024,
+        temperature: 0.3
+      })
+    });
+  } catch (err) {
+    const causeCode = err?.cause?.code ? ` (${err.cause.code})` : '';
+    throw new Error(`Groq network error: ${err?.message || 'fetch failed'}${causeCode}`);
+  }
 
   if (!response.ok) {
     const errorBody = await response.text();

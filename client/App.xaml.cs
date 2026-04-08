@@ -1,35 +1,62 @@
 using System;
+using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
 using System.Drawing;
+using CodeExplainer.Engine;
+using CodeExplainer.Engine.Managers;
+using CodeExplainer.Engine.Models;
 
 namespace CodeExplainer
 {
     public partial class App : System.Windows.Application
     {
         private NotifyIcon? _trayIcon;
-        private HotkeyManager? _hotkeyManager;
+        private GlobalHotkeyManager? _hotkeyManager;
+        private ContextCaptureEngine? _captureEngine;
         private OverlayWindow? _overlayWindow;
         private MainWindow? _hiddenWindow;
+        private int _isExplainInProgress;
+        private int _requestSequence;
 
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            RuntimeLog.Info("App", "Startup began.");
+            RuntimeLog.Info("App", $"Log file: {RuntimeLog.CurrentLogPath}");
 
             // Hidden window needed for hotkey message pump
             _hiddenWindow = new MainWindow();
+            _hiddenWindow.Show();
+            _hiddenWindow.Hide();
+            RuntimeLog.Info("App", "Hidden message window created.");
 
             // Setup system tray icon
             SetupTrayIcon();
+            RuntimeLog.Info("App", "Tray icon ready.");
 
-            // Setup hotkey manager (Ctrl+Space)
-            _hotkeyManager = new HotkeyManager(_hiddenWindow);
+            // Setup new engine
+            _captureEngine = new ContextCaptureEngine();
+
+            // Setup hotkey manager (Ctrl+Shift+Space)
+            _hotkeyManager = new GlobalHotkeyManager(_hiddenWindow);
             _hotkeyManager.HotkeyPressed += OnHotkeyPressed;
             _hotkeyManager.Register();
+            UpdateTrayHotkeyStatus();
+            if (_hotkeyManager.IsRegistered)
+            {
+                RuntimeLog.Info("Hotkey", $"Registered {_hotkeyManager.RegisteredHotkeyLabel}.");
+            }
+            else
+            {
+                RuntimeLog.Error("Hotkey", "No global hotkey could be registered.");
+            }
 
             // Create overlay (hidden initially)
             _overlayWindow = new OverlayWindow();
+            RuntimeLog.Info("App", "Overlay window created. App is ready.");
         }
 
         private void SetupTrayIcon()
@@ -38,7 +65,7 @@ namespace CodeExplainer
             {
                 Icon = SystemIcons.Information,
                 Visible = true,
-                Text = "Code Explainer — Ctrl+Space to explain"
+                Text = "Code Explainer - starting up"
             };
 
             var contextMenu = new ContextMenuStrip();
@@ -46,81 +73,144 @@ namespace CodeExplainer
             _trayIcon.ContextMenuStrip = contextMenu;
         }
 
-        private async void OnHotkeyPressed(object? sender, EventArgs e)
+        private void UpdateTrayHotkeyStatus()
         {
-            try
+            if (_trayIcon == null || _hotkeyManager == null)
             {
-                await HandleExplainRequest();
+                return;
             }
-            catch (Exception ex)
+
+            if (_hotkeyManager.IsRegistered)
             {
-                System.Diagnostics.Debug.WriteLine($"Error handling hotkey: {ex.Message}");
+                _trayIcon.Text = $"Code Explainer - {_hotkeyManager.RegisteredHotkeyLabel}";
+
+                if (!string.Equals(_hotkeyManager.RegisteredHotkeyLabel, GlobalHotkeyManager.PreferredHotkeyLabel, StringComparison.Ordinal))
+                {
+                    _trayIcon.ShowBalloonTip(
+                        4000,
+                        "Code Explainer",
+                        $"Using {_hotkeyManager.RegisteredHotkeyLabel}. {GlobalHotkeyManager.PreferredHotkeyLabel} was already in use.",
+                        ToolTipIcon.Info);
+                }
+            }
+            else
+            {
+                _trayIcon.Text = "Code Explainer - no hotkey";
+                _trayIcon.ShowBalloonTip(
+                    5000,
+                    "Code Explainer",
+                    "No global hotkey could be registered. Close conflicting hotkey apps and relaunch.",
+                    ToolTipIcon.Warning);
             }
         }
 
-        private async Task HandleExplainRequest()
+        private async void OnHotkeyPressed(object? sender, EventArgs e)
         {
-            // Step 1: Detect active application
-            var (processName, appType) = AppDetector.GetActiveApp();
-            System.Diagnostics.Debug.WriteLine($"Active app: {processName} ({appType})");
-
-            string? selectedText = null;
-            string? fullContext = null;
-            bool fallbackUsed = false;
-
-            // Step 2: Determine capture strategy based on app type
-            bool skipUIA = AppDetector.ShouldSkipUIA(processName);
-
-            if (!skipUIA)
+            if (Interlocked.CompareExchange(ref _isExplainInProgress, 1, 0) != 0)
             {
-                // Try UIA first for editors, browsers, unknown apps
-                try
-                {
-                    selectedText = UIATextReader.GetSelectedText();
-                    fullContext = UIATextReader.GetFullContext();
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"UIA failed: {ex.Message}");
-                }
+                RuntimeLog.Warn("Hotkey", "Ignored because a previous explain request is still in progress.");
+                _overlayWindow?.ShowMessage(
+                    "A previous explain request is still running. Please wait a moment and try again.",
+                    "busy");
+                return;
             }
 
-            // Step 3: Clipboard fallback if UIA failed or was skipped
-            if (string.IsNullOrEmpty(selectedText))
+            int requestId = Interlocked.Increment(ref _requestSequence);
+            string hotkeyLabel = _hotkeyManager?.RegisteredHotkeyLabel ?? "unknown";
+            RuntimeLog.Info("Flow", $"req={requestId} stage=hotkey_triggered key=\"{hotkeyLabel}\"");
+            var requestTimer = Stopwatch.StartNew();
+            try
             {
-                try
-                {
-                    bool isTerminal = appType == "terminal";
-                    var clipResult = await ClipboardFallback.CaptureViaClipboard(isTerminal);
-                    selectedText = clipResult.SelectedText;
-                    fullContext = clipResult.FullContext;
-                    fallbackUsed = true;
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Clipboard fallback failed: {ex.Message}");
-                }
+                await HandleExplainRequest(requestId);
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error("App", $"req={requestId} Error handling hotkey: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error handling hotkey: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _isExplainInProgress, 0);
+                requestTimer.Stop();
+                RuntimeLog.Info("Flow", $"req={requestId} stage=hotkey_finished duration_ms={requestTimer.ElapsedMilliseconds}");
+            }
+        }
+
+        private async Task HandleExplainRequest(int requestId)
+        {
+            if (_captureEngine == null) return;
+
+            await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
+
+            // Execute the centralized engine capture pipeline
+            var captureResult = await _captureEngine.ExecuteCaptureAsync(requestId);
+            RuntimeLog.Info(
+                "Capture",
+                $"req={requestId} process={captureResult.ProcessName} title=\"{RuntimeLog.Preview(captureResult.WindowTitle, 60)}\" env={captureResult.Type.ToApiValue()} " +
+                $"selected_method={captureResult.SelectedMethod.ToApiValue()} background_method={captureResult.BackgroundMethod.ToApiValue()} " +
+                $"selected_chars={captureResult.SelectedText.Length} background_chars={captureResult.BackgroundContext.Length} " +
+                $"is_partial={captureResult.IsPartial} is_unsupported={captureResult.IsUnsupported} status=\"{RuntimeLog.Preview(captureResult.StatusMessage, 120)}\"");
+
+            if (captureResult.HasSelectedText)
+            {
+                RuntimeLog.Info("Capture", $"req={requestId} Selected preview: {RuntimeLog.Preview(captureResult.SelectedText)}");
+            }
+            else
+            {
+                RuntimeLog.Warn("Capture", $"req={requestId} No selected text was captured.");
             }
 
-            // Step 4: If we have text, send to backend
-            if (!string.IsNullOrWhiteSpace(selectedText))
+            if (!string.IsNullOrWhiteSpace(captureResult.BackgroundContext))
             {
-                // Show overlay with loading state
-                _overlayWindow?.ShowLoading();
+                RuntimeLog.Info("Capture", $"req={requestId} Background preview: {RuntimeLog.Preview(captureResult.BackgroundContext)}");
+            }
 
-                // Send to backend and stream response
+            if (captureResult.IsUnsupported)
+            {
+                RuntimeLog.Warn("Capture", $"req={requestId} {captureResult.StatusMessage}");
+                _overlayWindow?.ShowMessage(
+                    captureResult.StatusMessage,
+                    $"{captureResult.Type.ToApiValue()} | unsupported");
+                return;
+            }
+
+            if (captureResult.HasSelectedText)
+            {
+                RuntimeLog.Info("Backend", $"req={requestId} Sending capture payload to backend.");
+                _overlayWindow?.ShowLoading(BuildStatusLabel(captureResult));
+
                 await BackendClient.SendExplainRequest(
-                    selectedText,
-                    fullContext ?? "",
-                    appType,
+                    captureResult.SelectedText,
+                    captureResult.BackgroundContext,
+                    captureResult.WindowTitle,
+                    captureResult.ProcessName,
+                    captureResult.Type.ToApiValue(),
+                    captureResult.SelectedMethod.ToApiValue(),
+                    captureResult.BackgroundMethod.ToApiValue(),
+                    captureResult.IsPartial,
+                    captureResult.StatusMessage,
+                    captureResult.IsUnsupported,
                     token => _overlayWindow?.AppendToken(token),
-                    () => _overlayWindow?.OnStreamComplete()
+                    status => _overlayWindow?.SetStatus(status),
+                    () => _overlayWindow?.OnStreamComplete(),
+                    requestId,
+                    ocrUsed:       captureResult.OcrUsed,
+                    ocrConfidence: captureResult.OcrConfidence
                 );
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("No text captured — nothing to explain.");
+                RuntimeLog.Warn("Overlay", $"req={requestId} {captureResult.StatusMessage}");
+                _overlayWindow?.ShowMessage(
+                    captureResult.StatusMessage,
+                    BuildStatusLabel(captureResult));
             }
+        }
+
+        private static string BuildStatusLabel(CaptureResult captureResult)
+        {
+            string mode = captureResult.IsPartial ? "partial" : "full";
+            return $"{captureResult.Type.ToApiValue()} | {captureResult.SelectedMethod.ToApiValue()} + {captureResult.BackgroundMethod.ToApiValue()} | {mode}";
         }
 
         private void ExitApp()

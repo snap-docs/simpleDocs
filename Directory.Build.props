@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)build\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(MSBuildThisFileDirectory)build\$(MSBuildProjectName)\obj\</MSBuildProjectExtensionsPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)build\$(MSBuildProjectName)\bin\</BaseOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**\obj_codex\**;**\bin_codex\**;build\**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>
