@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "eval": "node eval_runner.js",
-    "export:live": "node export_live_log_dataset.js"
+    "export:live": "node export_live_log_dataset.js",
+    "augment-cases": "node augment_all_cases.js"
   },
   "dependencies": {
     "ws": "^8.16.0"

@@ -114,7 +114,10 @@ You must ensure the backend server is running first (refer to section 6), as the
 cd evaluation
 npm run eval
 ```
-The script will loop through all `.json` files inside `/cases/`, wait for final response chunks over WS, and print successes/latencies to the terminal before saving quietly inside `/results`.
+The script will loop through all .json files inside /cases/, wait for final response chunks over WS, and print successes/latencies to the terminal before saving quietly inside /results.
+
+**For a deep dive into the latest benchmarking results (95.5% browser success rate, 1.7s latency) and tool operational guides, see:**
+👉 [Evaluation Module & Performance Report](evaluation/evaluation_module_details.md)
 
 ---
 
