@@ -1,4 +1,4 @@
-# Prototype 4: Intelligent Context Engine & Code Explainer (Team Onboarding Guide)
+# Intelligent Context Engine & Code Explainer (Team Onboarding Guide)
 
 Welcome to the Prototype 4 repository. This document serves as the absolute master guide for onboarding new engineers to the system. It covers the full architecture, exact technologies utilized, the context-capture flow, evaluation systems, and the future evolution of our OS-level assistant.
 
