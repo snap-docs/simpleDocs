@@ -19,6 +19,7 @@ import { logger } from '../utils/logger.js';
 export async function handleStreamRequest(data, ws, authUser = null) {
   const startTime = Date.now();
   const timestampIso = new Date().toISOString();
+  let requestStatus = 'completed';
 
   const {
     session_id,
@@ -115,6 +116,7 @@ export async function handleStreamRequest(data, ws, authUser = null) {
       ws.send(JSON.stringify({ type: 'token', content: token }));
     }
   } catch (err) {
+    requestStatus = 'stream_error';
     logger.error(`Stream error: ${err.message}`);
     ws.send(JSON.stringify({ type: 'error', message: `Stream error: ${err.message}` }));
   }
@@ -122,13 +124,24 @@ export async function handleStreamRequest(data, ws, authUser = null) {
   ws.send(JSON.stringify({ type: 'complete' }));
 
   const totalResponseTimeMs = Date.now() - startTime;
+  if (requestStatus === 'completed') {
+    requestStatus = determineRequestStatus({
+      isPartial: Boolean(is_partial),
+      isUnsupported: Boolean(is_unsupported),
+      hasResponseText: responseParts.join('').trim().length > 0
+    });
+  }
+
   void logCompletedRequest({
     participant_id: participantId,
     session_id: cleanSessionId,
     request_id: cleanRequestId,
     timestamp: timestampIso,
+    environment_type: cleanEnvironmentType,
+    process_name: cleanProcessName,
     usage_context: cleanUsageContext,
     window_title: cleanWindowTitle,
+    background_context: cleanBackground,
     selected_method: cleanSelectedMethod,
     background_method: cleanBackgroundMethod,
     is_partial: Boolean(is_partial),
@@ -137,7 +150,8 @@ export async function handleStreamRequest(data, ws, authUser = null) {
     time_to_first_token_ms: timeToFirstTokenMs,
     total_response_time_ms: totalResponseTimeMs,
     selected_text: cleanSelected,
-    response_text: responseParts.join('')
+    response_text: responseParts.join(''),
+    status: requestStatus
   });
 
   logger.info(`[WS] Complete in ${totalResponseTimeMs}ms`);
@@ -172,4 +186,20 @@ function fallbackUsageContext(environmentType, processName) {
     default:
       return `${environmentType || 'unknown'}|${processName || 'unknown'}`;
   }
+}
+
+function determineRequestStatus({ isPartial, isUnsupported, hasResponseText }) {
+  if (isUnsupported) {
+    return 'unsupported';
+  }
+
+  if (isPartial) {
+    return 'partial';
+  }
+
+  if (!hasResponseText) {
+    return 'empty_response';
+  }
+
+  return 'completed';
 }
