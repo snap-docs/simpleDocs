@@ -1,4 +1,11 @@
 dist/
+build/
+backend/node_modules/
+client/build/
+**/bin/
+**/obj/
+client/bin_codex/
+client/obj_codex/
 *.log
 *.zip
 backend/.env
