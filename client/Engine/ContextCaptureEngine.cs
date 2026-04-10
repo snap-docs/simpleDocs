@@ -77,6 +77,21 @@ namespace CodeExplainer.Engine
                     Debug.WriteLine($"[ContextCaptureEngine] Executing strategy: {strategy.GetType().Name}");
                     var stopwatch = Stopwatch.StartNew();
                     CaptureResult result = await strategy.CaptureAsync(activeWindow);
+                    string usageContext = UsageContextBuilder.Build(activeWindow, result.Type);
+                    result = new CaptureResult(
+                        selectedText: result.SelectedText,
+                        backgroundContext: result.BackgroundContext,
+                        windowTitle: result.WindowTitle,
+                        processName: result.ProcessName,
+                        type: result.Type,
+                        selectedMethod: result.SelectedMethod,
+                        backgroundMethod: result.BackgroundMethod,
+                        isPartial: result.IsPartial,
+                        isUnsupported: result.IsUnsupported,
+                        statusMessage: result.StatusMessage,
+                        ocrUsed: result.OcrUsed,
+                        ocrConfidence: result.OcrConfidence,
+                        usageContext: usageContext);
                     stopwatch.Stop();
                     LogCaptureSummary(requestId, activeWindow, strategy, result, stopwatch.ElapsedMilliseconds);
                     return result;

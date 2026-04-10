@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 
 namespace CodeExplainer
 {
@@ -9,6 +10,12 @@ namespace CodeExplainer
         private static readonly string LogFilePath = ResolveLogFilePath();
 
         public static string CurrentLogPath => LogFilePath;
+
+        public static string AppVersion =>
+            Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+            ?? "unknown";
 
         public static void Info(string area, string message) => Write("INFO", area, message);
 

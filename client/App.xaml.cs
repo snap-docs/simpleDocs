@@ -20,12 +20,21 @@ namespace CodeExplainer
         private MainWindow? _hiddenWindow;
         private int _isExplainInProgress;
         private int _requestSequence;
+        private ClientConfig? _config;
+        private AuthSessionManager? _authSessionManager;
+        private ToolStripMenuItem? _signInMenuItem;
+        private ToolStripMenuItem? _logoutMenuItem;
 
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
             RuntimeLog.Info("App", "Startup began.");
             RuntimeLog.Info("App", $"Log file: {RuntimeLog.CurrentLogPath}");
+            RuntimeLog.Info("App", $"Version: {RuntimeLog.AppVersion}");
+            _config = ClientConfig.Load();
+            BackendClient.Configure(_config);
+            _authSessionManager = new AuthSessionManager(_config);
+            RuntimeLog.Info("App", $"Environment={_config.EnvironmentName} api={_config.ApiBaseUrl} ws={_config.WsBaseUrl} auth_enabled={_config.AuthEnabled}");
 
             // Hidden window needed for hotkey message pump
             _hiddenWindow = new MainWindow();
@@ -40,6 +49,17 @@ namespace CodeExplainer
             // Setup new engine
             _captureEngine = new ContextCaptureEngine();
 
+            // Create overlay (hidden initially)
+            _overlayWindow = new OverlayWindow();
+
+            bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in is required to start Code Explainer.");
+            if (!authenticated)
+            {
+                RuntimeLog.Warn("Auth", "Startup aborted because sign-in was not completed.");
+                ExitApp();
+                return;
+            }
+
             // Setup hotkey manager (Ctrl+Shift+Space)
             _hotkeyManager = new GlobalHotkeyManager(_hiddenWindow);
             _hotkeyManager.HotkeyPressed += OnHotkeyPressed;
@@ -53,9 +73,6 @@ namespace CodeExplainer
             {
                 RuntimeLog.Error("Hotkey", "No global hotkey could be registered.");
             }
-
-            // Create overlay (hidden initially)
-            _overlayWindow = new OverlayWindow();
             RuntimeLog.Info("App", "Overlay window created. App is ready.");
         }
 
@@ -69,8 +86,14 @@ namespace CodeExplainer
             };
 
             var contextMenu = new ContextMenuStrip();
+            _signInMenuItem = new ToolStripMenuItem("Sign In", null, async (_, _) => await SignInFromTrayAsync());
+            _logoutMenuItem = new ToolStripMenuItem("Logout", null, async (_, _) => await LogoutFromTrayAsync());
+            contextMenu.Items.Add(_signInMenuItem);
+            contextMenu.Items.Add(_logoutMenuItem);
+            contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add("Exit", null, (_, _) => ExitApp());
             _trayIcon.ContextMenuStrip = contextMenu;
+            UpdateTrayAuthStatus();
         }
 
         private void UpdateTrayHotkeyStatus()
@@ -104,6 +127,26 @@ namespace CodeExplainer
             }
         }
 
+        private void UpdateTrayAuthStatus()
+        {
+            if (_trayIcon == null)
+            {
+                return;
+            }
+
+            bool hasSession = _authSessionManager?.HasStoredSession == true;
+            bool authEnabled = _config?.AuthEnabled != false;
+            if (_signInMenuItem != null)
+            {
+                _signInMenuItem.Enabled = authEnabled && !hasSession;
+            }
+
+            if (_logoutMenuItem != null)
+            {
+                _logoutMenuItem.Enabled = authEnabled && hasSession;
+            }
+        }
+
         private async void OnHotkeyPressed(object? sender, EventArgs e)
         {
             if (Interlocked.CompareExchange(ref _isExplainInProgress, 1, 0) != 0)
@@ -121,6 +164,13 @@ namespace CodeExplainer
             var requestTimer = Stopwatch.StartNew();
             try
             {
+                bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in is required before sending a request.");
+                if (!authenticated)
+                {
+                    _overlayWindow?.ShowMessage("Sign-in is required before you can request an explanation.", "auth required");
+                    return;
+                }
+
                 await HandleExplainRequest(requestId);
             }
             catch (Exception ex)
@@ -139,6 +189,7 @@ namespace CodeExplainer
         private async Task HandleExplainRequest(int requestId)
         {
             if (_captureEngine == null) return;
+            if (_authSessionManager == null) return;
 
             await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
 
@@ -176,6 +227,28 @@ namespace CodeExplainer
 
             if (captureResult.HasSelectedText)
             {
+                string accessToken = string.Empty;
+                if (_config?.AuthEnabled != false)
+                {
+                    try
+                    {
+                        accessToken = await _authSessionManager.EnsureValidAccessTokenAsync();
+                    }
+                    catch (SessionExpiredException ex)
+                    {
+                        RuntimeLog.Warn("Auth", $"req={requestId} session expired while preparing backend request: {ex.Message}");
+                        bool reauthenticated = await EnsureAuthenticatedAsync(interactive: true, "Your session expired. Sign in again to continue.");
+                        if (!reauthenticated)
+                        {
+                            _overlayWindow?.ShowMessage("Your session expired. Sign in again to continue.", "auth required");
+                            return;
+                        }
+
+                        accessToken = await _authSessionManager.EnsureValidAccessTokenAsync();
+                    }
+                }
+
+                string streamRequestId = _authSessionManager.BuildRequestId(requestId);
                 RuntimeLog.Info("Backend", $"req={requestId} Sending capture payload to backend.");
                 _overlayWindow?.ShowLoading(BuildStatusLabel(captureResult), requestId);
 
@@ -190,10 +263,13 @@ namespace CodeExplainer
                     captureResult.IsPartial,
                     captureResult.StatusMessage,
                     captureResult.IsUnsupported,
+                    accessToken,
+                    _authSessionManager.SessionId,
+                    streamRequestId,
+                    captureResult.UsageContext,
                     token => _overlayWindow?.AppendToken(token),
                     status => _overlayWindow?.SetStatus(status),
                     () => _overlayWindow?.OnStreamComplete(),
-                    requestId,
                     ocrUsed:       captureResult.OcrUsed,
                     ocrConfidence: captureResult.OcrConfidence
                 );
@@ -204,6 +280,123 @@ namespace CodeExplainer
                 _overlayWindow?.ShowMessage(
                     captureResult.StatusMessage,
                     BuildStatusLabel(captureResult));
+            }
+        }
+
+        private async Task<bool> EnsureAuthenticatedAsync(bool interactive, string reason)
+        {
+            if (_authSessionManager == null)
+            {
+                return false;
+            }
+
+            if (_config?.AuthEnabled == false)
+            {
+                UpdateTrayAuthStatus();
+                return true;
+            }
+
+            try
+            {
+                await _authSessionManager.EnsureValidAccessTokenAsync();
+                UpdateTrayAuthStatus();
+                return true;
+            }
+            catch (SessionExpiredException)
+            {
+                // Fall through to restore/login logic below.
+            }
+
+            bool restored = await _authSessionManager.TryRestoreSessionAsync();
+            if (restored)
+            {
+                UpdateTrayAuthStatus();
+                return true;
+            }
+
+            if (!interactive)
+            {
+                UpdateTrayAuthStatus();
+                return false;
+            }
+
+            return await PromptForLoginAsync(reason);
+        }
+
+        private async Task<bool> PromptForLoginAsync(string reason)
+        {
+            RuntimeLog.Info("Auth", reason);
+            while (true)
+            {
+                var loginWindow = new LoginWindow();
+                loginWindow.SetError(reason);
+                bool? result = loginWindow.ShowDialog();
+                if (result != true)
+                {
+                    UpdateTrayAuthStatus();
+                    return false;
+                }
+
+                try
+                {
+                    if (_authSessionManager == null)
+                    {
+                        return false;
+                    }
+
+                    await _authSessionManager.RedeemCodeAsync(loginWindow.RedeemCode);
+                    RuntimeLog.Info("Auth", "Redeem code accepted.");
+                    UpdateTrayAuthStatus();
+                    return true;
+                }
+                catch (AuthApiException ex)
+                {
+                    RuntimeLog.Warn("Auth", $"Redeem code failed: {ex.Message}");
+                    reason = ex.Message;
+                }
+                catch (Exception ex)
+                {
+                    RuntimeLog.Error("Auth", $"Redeem code request failed: {ex.Message}");
+                    reason = "Unable to reach the backend. Check your connection and try again.";
+                }
+            }
+        }
+
+        private async Task SignInFromTrayAsync()
+        {
+            if (_config?.AuthEnabled == false)
+            {
+                _trayIcon?.ShowBalloonTip(2500, "Code Explainer", "Sign-in is disabled in the current environment.", ToolTipIcon.Info);
+                return;
+            }
+
+            bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in to continue.");
+            if (authenticated && _trayIcon != null)
+            {
+                _trayIcon.ShowBalloonTip(2500, "Code Explainer", "You are signed in.", ToolTipIcon.Info);
+            }
+        }
+
+        private async Task LogoutFromTrayAsync()
+        {
+            if (_config?.AuthEnabled == false)
+            {
+                _trayIcon?.ShowBalloonTip(2500, "Code Explainer", "Sign-in is disabled in the current environment.", ToolTipIcon.Info);
+                return;
+            }
+
+            if (_authSessionManager == null)
+            {
+                return;
+            }
+
+            await _authSessionManager.LogoutAsync();
+            UpdateTrayAuthStatus();
+            _overlayWindow?.ShowMessage("You have been signed out.", "signed out");
+            bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Enter a redeem code to sign in again.");
+            if (!authenticated)
+            {
+                _trayIcon?.ShowBalloonTip(3000, "Code Explainer", "You are currently signed out.", ToolTipIcon.Warning);
             }
         }
 

@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { classify } from '../services/classifier.js';
 import { buildPrompt } from '../services/promptEngine.js';
-import { logInteraction } from '../db/supabase.js';
 import { validateExplainRequest } from '../middleware/validate.js';
 import { logger } from '../utils/logger.js';
 
@@ -36,14 +35,6 @@ export function createExplainRoute() {
 
     const responseTimeMs = Date.now() - startTime;
     const modelUsed = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-haiku';
-
-    logInteraction({
-      caseType,
-      environmentType: environment_type,
-      responseTimeMs,
-      modelUsed,
-      fallbackUsed: false
-    }).catch(err => logger.error(`Logging failed: ${err.message}`));
 
     return c.json({
       case: caseType,

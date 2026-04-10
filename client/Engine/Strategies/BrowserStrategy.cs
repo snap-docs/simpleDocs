@@ -58,21 +58,6 @@ namespace CodeExplainer.Engine.Strategies
             bool isPartial = background.IsMetadataFallback;
             string combinedStatus = $"{selected.Status} {background.Status}".Trim();
 
-            // ── DEBUG: Force OCR on every browser capture to verify OCR pipeline ──────
-            // TEMPORARY - remove after OCR is confirmed working
-            RuntimeLog.Info("OCR_DEBUG", $"Force-running OCR on '{window.Title}' ({window.ProcessName}) for debug.");
-            var debugOcr = await OcrCapture.CaptureWithConfidenceAsync(window, OcrCaptureArea.FullWindow);
-            if (debugOcr.IsUsable(0.0f))
-            {
-                RuntimeLog.Info("OCR_DEBUG", $"OCR result: confidence={debugOcr.Confidence:F2} chars={debugOcr.Text.Length} area={debugOcr.Area}");
-                RuntimeLog.Info("OCR_DEBUG", $"OCR preview: {debugOcr.Text.Replace('\n',' ').Substring(0, System.Math.Min(120, debugOcr.Text.Length))}");
-            }
-            else
-            {
-                RuntimeLog.Warn("OCR_DEBUG", $"OCR returned empty or below threshold. confidence={debugOcr.Confidence:F2}");
-            }
-            // ── END DEBUG ─────────────────────────────────────────────────────────────
-
             return new CaptureResult(
                 selectedText: selected.Text,
                 backgroundContext: background.Text,

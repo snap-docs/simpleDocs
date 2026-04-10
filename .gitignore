@@ -1,7 +1,4 @@
-.env
-**/node_modules/
-**/bin/
-**/obj/
-build/
-**/bin_codex/
-**/obj_codex/
+dist/
+*.log
+*.zip
+backend/.env

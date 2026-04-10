@@ -1,6 +1,7 @@
 using System;
 using System.Net.WebSockets;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -11,9 +12,14 @@ namespace CodeExplainer
     /// <summary>
     /// Communicates with the Node.js backend. HTTP POST for requests, WebSocket for streaming.
     /// </summary>
-    public static class BackendClient
+    internal static class BackendClient
     {
-        private static string WsUrl => "ws://localhost:3000";
+        private static ClientConfig _config = new ClientConfig();
+
+        public static void Configure(ClientConfig config)
+        {
+            _config = config ?? new ClientConfig();
+        }
 
         /// <summary>
         /// Sends an explain request and receives streamed tokens via WebSocket.
@@ -29,31 +35,30 @@ namespace CodeExplainer
             bool isPartial,
             string? statusMessage,
             bool isUnsupported,
+            string accessToken,
+            string sessionId,
+            string requestId,
+            string usageContext,
             Action<string>? onToken = null,
             Action<string>? onStatus = null,
             Action? onComplete = null,
-            int? requestId = null,
             bool ocrUsed = false,
             float ocrConfidence = 0f)
         {
-            string requestLabel = requestId?.ToString() ?? "-";
             var streamStopwatch = Stopwatch.StartNew();
             int tokenChunks = 0;
             int tokenChars = 0;
 
             try
             {
-                using var ws = new ClientWebSocket();
-                var wsUri = new Uri($"{WsUrl}/ws/stream");
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                RuntimeLog.Info(
-                    "Backend",
-                    $"req={requestLabel} stage=connecting url={wsUri} selected_chars={selectedText.Length} background_chars={backgroundContext.Length} env={environmentType} selected_method={selectedMethod} background_method={backgroundMethod} partial={isPartial} unsupported={isUnsupported}");
-                await ws.ConnectAsync(wsUri, cts.Token);
-                RuntimeLog.Info("Backend", $"req={requestLabel} stage=connected");
+                using var ws = await ConnectWithRetryAsync(accessToken, requestId, selectedText.Length, backgroundContext.Length, environmentType, selectedMethod, backgroundMethod, isPartial, isUnsupported);
+                using var streamCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
                 var payload = new
                 {
+                    session_id         = sessionId,
+                    request_id         = requestId,
+                    usage_context      = usageContext,
                     selected_text      = selectedText,
                     background_context = backgroundContext,
                     window_title       = windowTitle,
@@ -74,12 +79,12 @@ namespace CodeExplainer
                     new ArraySegment<byte>(sendBuffer),
                     WebSocketMessageType.Text,
                     true,
-                    cts.Token);
-                RuntimeLog.Info("Backend", $"req={requestLabel} stage=payload_sent");
+                    streamCts.Token);
+                RuntimeLog.Info("Backend", $"req={requestId} stage=payload_sent");
 
                 while (ws.State == WebSocketState.Open)
                 {
-                    string? message = await ReceiveFullMessageAsync(ws, cts.Token);
+                    string? message = await ReceiveFullMessageAsync(ws, streamCts.Token);
                     if (message == null)
                     {
                         break;
@@ -90,7 +95,7 @@ namespace CodeExplainer
                         onToken,
                         onStatus,
                         onComplete,
-                        requestLabel,
+                        requestId,
                         ref tokenChunks,
                         ref tokenChars);
                     if (!shouldContinue)
@@ -107,12 +112,12 @@ namespace CodeExplainer
                 streamStopwatch.Stop();
                 RuntimeLog.Info(
                     "Backend",
-                    $"req={requestLabel} stage=stream_finished token_chunks={tokenChunks} token_chars={tokenChars} duration_ms={streamStopwatch.ElapsedMilliseconds}");
+                    $"req={requestId} stage=stream_finished token_chunks={tokenChunks} token_chars={tokenChars} duration_ms={streamStopwatch.ElapsedMilliseconds}");
             }
             catch (Exception ex)
             {
                 streamStopwatch.Stop();
-                RuntimeLog.Error("Backend", $"req={requestLabel} stage=error message={ex.Message}");
+                RuntimeLog.Error("Backend", $"req={requestId} stage=error message={ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"BackendClient error: {ex.Message}");
                 RunOnUiThread(() =>
                 {
@@ -121,6 +126,54 @@ namespace CodeExplainer
                     onComplete?.Invoke();
                 });
             }
+        }
+
+        private static async Task<ClientWebSocket> ConnectWithRetryAsync(
+            string accessToken,
+            string requestId,
+            int selectedChars,
+            int backgroundChars,
+            string environmentType,
+            string selectedMethod,
+            string backgroundMethod,
+            bool isPartial,
+            bool isUnsupported)
+        {
+            Exception? lastError = null;
+            Uri wsUri = new Uri($"{_config.WsBaseUrl}/ws/stream");
+
+            for (int attempt = 1; attempt <= Math.Max(1, _config.WebSocketRetryCount); attempt++)
+            {
+                var ws = new ClientWebSocket();
+                if (!string.IsNullOrWhiteSpace(accessToken))
+                {
+                    ws.Options.SetRequestHeader("Authorization", $"Bearer {accessToken}");
+                }
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_config.WebSocketConnectTimeoutSeconds));
+                try
+                {
+                    RuntimeLog.Info(
+                        "Backend",
+                        $"req={requestId} stage=connecting attempt={attempt} url={wsUri} selected_chars={selectedChars} background_chars={backgroundChars} env={environmentType} selected_method={selectedMethod} background_method={backgroundMethod} partial={isPartial} unsupported={isUnsupported}");
+                    await ws.ConnectAsync(wsUri, cts.Token);
+                    RuntimeLog.Info("Backend", $"req={requestId} stage=connected attempt={attempt}");
+                    return ws;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    ws.Dispose();
+                    RuntimeLog.Warn("Backend", $"req={requestId} stage=connect_retry attempt={attempt} message={ex.Message}");
+                    if (attempt < Math.Max(1, _config.WebSocketRetryCount))
+                    {
+                        int delayMs = _config.WebSocketRetryBaseDelayMs * attempt;
+                        await Task.Delay(delayMs);
+                    }
+                }
+            }
+
+            throw new HttpRequestException($"Unable to connect to backend WebSocket. {lastError?.Message}", lastError);
         }
 
         private static bool HandleSocketMessage(

@@ -4,6 +4,8 @@
  */
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const APP_REFERER = process.env.PUBLIC_APP_URL || 'https://code-explainer.local';
+const APP_TITLE = process.env.PUBLIC_APP_TITLE || 'Code Explainer';
 
 /**
  * Stream a chat completion from OpenRouter.
@@ -29,8 +31,8 @@ export async function* streamCompletion(systemPrompt, userPrompt) {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://code-explainer.local',
-        'X-Title': 'Code Explainer'
+        'HTTP-Referer': APP_REFERER,
+        'X-Title': APP_TITLE
       },
       body: JSON.stringify({
         model,

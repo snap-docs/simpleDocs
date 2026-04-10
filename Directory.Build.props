@@ -4,5 +4,11 @@
     <MSBuildProjectExtensionsPath>$(MSBuildThisFileDirectory)build\$(MSBuildProjectName)\obj\</MSBuildProjectExtensionsPath>
     <BaseOutputPath>$(MSBuildThisFileDirectory)build\$(MSBuildProjectName)\bin\</BaseOutputPath>
     <DefaultItemExcludes>$(DefaultItemExcludes);**\obj_codex\**;**\bin_codex\**;build\**</DefaultItemExcludes>
+    <Version>1.1.0-pilot</Version>
+    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <InformationalVersion>1.1.0-pilot</InformationalVersion>
+    <Company>Code Explainer</Company>
+    <Product>Code Explainer</Product>
   </PropertyGroup>
 </Project>

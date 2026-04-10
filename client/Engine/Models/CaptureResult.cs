@@ -6,6 +6,7 @@ namespace CodeExplainer.Engine.Models
         public string BackgroundContext { get; }
         public string WindowTitle { get; }
         public string ProcessName { get; }
+        public string UsageContext { get; }
         public EnvironmentType Type { get; }
         public CaptureMethod SelectedMethod { get; }
         public CaptureMethod BackgroundMethod { get; }
@@ -31,12 +32,14 @@ namespace CodeExplainer.Engine.Models
             bool isUnsupported,
             string statusMessage,
             bool ocrUsed = false,
-            float ocrConfidence = 0f)
+            float ocrConfidence = 0f,
+            string usageContext = "")
         {
             SelectedText = selectedText;
             BackgroundContext = backgroundContext;
             WindowTitle = windowTitle;
             ProcessName = processName;
+            UsageContext = usageContext;
             Type = type;
             SelectedMethod = selectedMethod;
             BackgroundMethod = backgroundMethod;
@@ -69,7 +72,8 @@ namespace CodeExplainer.Engine.Models
                 backgroundMethod: backgroundMethod,
                 isPartial: true,
                 isUnsupported: true,
-                statusMessage: statusMessage);
+                statusMessage: statusMessage,
+                usageContext: string.Empty);
         }
 
         public static CaptureResult Partial(
@@ -91,7 +95,8 @@ namespace CodeExplainer.Engine.Models
                 backgroundMethod: backgroundMethod,
                 isPartial: true,
                 isUnsupported: false,
-                statusMessage: statusMessage);
+                statusMessage: statusMessage,
+                usageContext: string.Empty);
         }
 
         public static string BuildMetadataContext(ActiveWindowInfo window)
