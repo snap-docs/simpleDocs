@@ -11,7 +11,7 @@ The core architecture remains intentionally unchanged:
 
 ## Current Product Status
 
-The project is now in late pilot-preparation stage.
+The project is now in late pilot-verification stage.
 
 Completed now:
 - native capture pipeline is in place
@@ -24,14 +24,19 @@ Completed now:
 - request/session logging path to hosted DB is implemented
 - Azure App Service backend is deployed
 - hosted `/api/health` is live and returning `ok`
+- hosted redeem-code login is working
+- hosted refresh and logout flow are working
+- hosted authenticated WebSocket explain flow is working
+- hosted DB row creation is working for `participants`, `refresh_tokens`, `sessions`, and `request_logs`
 - client staging/production config now points to the hosted Azure backend
 - production client publish works
 - tester bundle build works
 - sign-in UI has been polished for production use
 
-Current blocker:
-- hosted `POST /auth/redeem-code` is still returning `500 Access token secret is not configured`
-- this means Azure environment-variable auth configuration still needs one final fix before real sign-in can succeed
+Current remaining validation:
+- one full manual redeem-code login still needs to be completed from the packaged WPF sign-in window
+- one full manual hotkey-triggered explanation still needs to be completed from the packaged WPF client
+- the tester bundle still needs one clean-machine validation outside the development machine
 
 ## High-Level Runtime Flow
 
@@ -185,20 +190,22 @@ Current hosted backend shape:
 Verified:
 - Azure backend deploy workflow is configured to deploy only `backend/`
 - hosted health endpoint responds successfully
+- hosted redeem / refresh / logout behavior has been verified directly against Azure
+- hosted WebSocket explanation and DB logging have been verified directly against Azure
 - production tester bundle launches and points to the hosted backend
 
 Not yet verified end to end:
-- redeem-code login against hosted backend
-- real explain request from packaged client to hosted backend
-- hosted DB row creation from the packaged client path
+- manual redeem-code login from the live packaged WPF sign-in window
+- manual explain request from the live packaged WPF client using real text selection and hotkey
+- packaged-client flow on a separate clean Windows machine
 
 ## Immediate Next Step
 
 The next concrete action is:
-1. fix Azure `ACCESS_TOKEN_SECRET` handling so hosted `/auth/redeem-code` succeeds
-2. run one real packaged-client sign-in
-3. run one real packaged-client explanation request
-4. confirm `participants`, `refresh_tokens`, `sessions`, and `request_logs`
+1. complete one manual packaged-client sign-in with a fresh redeem code
+2. run one manual packaged-client explanation request using the real hotkey
+3. confirm the new `participants`, `refresh_tokens`, `sessions`, and `request_logs` rows from that packaged-client path
+4. validate the tester bundle on a clean Windows machine
 
 ## Important Documents
 

@@ -36,6 +36,10 @@ This document tracks the current implementation status of the deployment-ready s
 ### Hosted validation
 - Azure backend is deployed
 - hosted health endpoint works
+- hosted redeem-code login works
+- hosted refresh/logout flow works
+- hosted authenticated WebSocket explanation works
+- hosted DB logging works
 - client production/staging config points to the hosted backend
 - production bundle launches correctly
 - sign-in UI has been polished
@@ -43,15 +47,14 @@ This document tracks the current implementation status of the deployment-ready s
 ## Remaining Work
 
 ### High priority
-1. fix Azure `ACCESS_TOKEN_SECRET` handling
-2. run one full redeem-code login test against hosted backend
-3. run one full explain request against hosted backend
-4. verify DB rows are created correctly
-5. validate tester bundle on a clean Windows machine
+1. run one full redeem-code login test from the packaged WPF client
+2. run one full explain request from the packaged WPF client
+3. verify DB rows are created correctly from that packaged-client flow
+4. validate tester bundle on a clean Windows machine
 
 ### Medium priority
 1. validate on multiple Windows environments
-2. verify logout and expired-session recovery with real backend
+2. verify expired-session recovery from the real packaged client
 3. prepare internal pilot support workflow
 4. rotate development secrets before external users
 
@@ -62,6 +65,6 @@ This document tracks the current implementation status of the deployment-ready s
 
 ## Current Truth
 
-The remaining work is now mostly hosted validation and pilot hardening.
+The remaining work is now mostly manual packaged-client validation and pilot hardening.
 
 The main product architecture should not be redesigned at this stage.

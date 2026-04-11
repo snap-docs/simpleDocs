@@ -18,11 +18,17 @@ For local development, localhost is still supported.
 Verified now:
 - Azure App Service backend is deployed
 - hosted health endpoint responds
+- hosted redeem-code login responds successfully
+- hosted refresh and logout flow respond successfully
+- hosted authenticated WebSocket explain flow responds successfully
+- hosted request logging writes rows successfully
 - production tester bundle launches
 - production tester bundle points to the hosted Azure backend
 
-Current blocker:
-- hosted `/auth/redeem-code` still fails with `Access token secret is not configured`
+Current remaining validation:
+- one manual packaged-client sign-in is still needed
+- one manual packaged-client hotkey explanation is still needed
+- one clean-machine packaged-bundle validation is still needed
 
 ## Prerequisites
 
@@ -116,12 +122,11 @@ Before handing a build to testers, verify these manually:
 
 ## Suggested Pilot Launch Path
 
-1. fix hosted auth secret handling
-2. verify hosted redeem-code login
-3. verify one packaged-client explain flow
-4. verify DB rows
-5. validate the tester bundle on a clean Windows machine
-6. hand the packaged client to internal pilot users first
+1. verify one packaged-client sign-in
+2. verify one packaged-client explain flow
+3. verify DB rows from that packaged-client flow
+4. validate the tester bundle on a clean Windows machine
+5. hand the packaged client to internal pilot users first
 
 ## Support Inputs To Collect
 
@@ -135,6 +140,5 @@ If a pilot tester reports an issue, collect:
 
 ## Known Remaining Launch Gaps
 
-- Azure auth secret handling still blocks hosted redeem-code login
-- one confirmed live auth-to-log path is still required before external rollout
+- one confirmed packaged-client auth-to-log path is still required before external rollout
 - tester bundle still needs validation on a separate clean machine

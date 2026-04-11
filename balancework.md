@@ -17,6 +17,11 @@ This document tracks the real remaining work after backend hosting, client packa
 - redeem codes are seeded in hosted DB
 - Azure App Service backend is deployed
 - hosted `/api/health` responds with `ok`
+- hosted redeem-code login is verified
+- hosted refresh flow is verified
+- hosted logout and token revocation are verified
+- hosted authenticated WebSocket explain flow is verified
+- hosted DB logging is verified
 - client staging and production config point to the hosted Azure backend
 - client debug build succeeds
 - client production publish succeeds
@@ -25,33 +30,16 @@ This document tracks the real remaining work after backend hosting, client packa
 - packaging/support scripts are present
 
 ### Still not fully finished
-- hosted auth is blocked because `/auth/redeem-code` returns `Access token secret is not configured`
 - one full packaged-client login against the hosted backend is still pending
-- one full packaged-client explanation request is still pending
-- hosted DB verification from the packaged-client flow is still pending
+- one full packaged-client explanation request through real text selection and hotkey is still pending
+- hosted DB verification from the packaged-client WPF flow is still pending
 - packaged build still needs validation on a separate clean Windows machine
 
 ## 2. Remaining Work By Priority
 
 ## Priority A: Must Complete Before Pilot
 
-### A1. Fix hosted auth configuration
-Status: not done
-
-Work:
-- verify Azure `ACCESS_TOKEN_SECRET` exists with the correct name
-- make sure the value is not blank or placeholder
-- apply/save Azure environment variables
-- restart the Azure Web App
-- re-test `POST /auth/redeem-code`
-
-Why it matters:
-- no tester can sign in until hosted auth works
-
-Done when:
-- hosted redeem-code login returns tokens instead of `500`
-
-### A2. Full hosted auth verification
+### A1. Full packaged-client auth verification
 Status: partly done
 
 Work:
@@ -62,42 +50,42 @@ Work:
 - test logout and refresh against hosted backend
 
 Why it matters:
-- auth code exists, but pilot readiness requires live behavior verification
+- the hosted auth endpoints are working, but pilot readiness still requires one complete real-client pass
 
 Done when:
 - sign-in, restart, refresh, and logout work against hosted backend from the real app
 
-### A3. Full hosted explain verification
+### A2. Full packaged-client explain verification
 Status: partly done
 
 Work:
-- start client against hosted backend
-- redeem a real code
-- send one real explain request
+- start packaged client against hosted backend
+- redeem a real code in the real sign-in window
+- select real text in a desktop app and press the hotkey
 - verify streaming response returns correctly
 - verify overlay remains responsive
 
 Why it matters:
-- this confirms the real deployment path, not just health checks and local builds
+- this confirms the real packaged desktop path, not just direct hosted endpoint tests
 
 Done when:
 - one end-to-end hosted explanation succeeds from the real WPF client flow
 
-### A4. DB request logging verification
+### A3. Packaged-client DB request logging verification
 Status: partly done
 
 Work:
-- confirm final `request_logs` row is created
-- confirm `participants` row exists
-- confirm `refresh_tokens` row exists
-- confirm `sessions` row exists/updates
+- confirm the new packaged-client `request_logs` row is created
+- confirm the related `participants` row exists or is reused
+- confirm the related `refresh_tokens` row exists
+- confirm the related `sessions` row exists/updates
 - verify final logged field values match expectations
 
 Why it matters:
-- this is required for the planned case-study and pilot analysis
+- direct hosted verification is already done, but the packaged-client path must also be proven for the study
 
 Done when:
-- one successful real-app request creates the expected rows in all related tables
+- one successful packaged-client request creates the expected rows in all related tables
 
 ## Priority B: Strongly Recommended Before External Users
 
@@ -205,20 +193,18 @@ Work:
 
 ## 4. Suggested Execution Order
 
-1. fix Azure `ACCESS_TOKEN_SECRET`
-2. re-test hosted redeem login
-3. test one full explanation from the real WPF client
-4. verify DB rows
-5. verify the packaged release on a clean Windows machine
-6. internal pilot
-7. fix pilot issues
-8. external pilot
+1. complete one manual packaged-client sign-in
+2. complete one manual packaged-client hotkey explanation
+3. verify the DB rows created by that packaged-client run
+4. verify the packaged release on a clean Windows machine
+5. internal pilot
+6. fix pilot issues
+7. external pilot
 
 ## 5. Deployment Blockers Right Now
 
 These are the real blockers preventing a true pilot release today:
-- hosted `/auth/redeem-code` still fails because Azure auth secret handling is not correct yet
-- no confirmed end-to-end live auth + explain + DB log test yet from the real WPF client
+- no confirmed end-to-end live auth + explain + DB log test yet from the real packaged WPF client
 - packaged build has not yet been validated on a clean tester machine
 
 ## 6. What Should Not Change Now
@@ -236,5 +222,6 @@ We can call the system pilot-ready when:
 - hosted auth works
 - hosted logging works
 - packaged client works
+- one packaged-client real sign-in and hotkey flow is verified
 - internal users complete real tasks successfully
 - no critical blocker remains in capture, overlay, or session flow

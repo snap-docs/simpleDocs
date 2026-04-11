@@ -51,18 +51,19 @@ The deployment path now includes:
 - Azure App Service backend deployment workflow exists
 - Azure backend is live
 - `/api/health` works from the hosted URL
+- hosted redeem / refresh / logout flow works
+- hosted authenticated WebSocket explanation works
+- hosted request logging works
 - client staging/production config points to the Azure backend
 - production tester bundle launches successfully
 
 ## What Still Needs To Be Done
 
 ### Must do before external users
-1. Fix hosted auth configuration so `/auth/redeem-code` succeeds.
-2. Run one real redeem-code login from the packaged WPF client.
-3. Run one full explain request from the packaged WPF client.
-4. Confirm DB rows are written to `participants`, `refresh_tokens`, `sessions`, and `request_logs`.
-5. Confirm logout and refresh behavior against the hosted backend.
-6. Verify the packaged tester bundle on a clean Windows machine.
+1. Run one real redeem-code login from the packaged WPF client.
+2. Run one full explain request from the packaged WPF client.
+3. Confirm DB rows are written to `participants`, `refresh_tokens`, `sessions`, and `request_logs` from that packaged-client path.
+4. Verify the packaged tester bundle on a clean Windows machine.
 
 ### Should do before broader rollout
 1. Validate on multiple Windows versions and DPI settings.
@@ -102,7 +103,6 @@ The deployment path now includes:
 ## Current Risks
 
 ### Technical risks
-- hosted `/auth/redeem-code` currently returns `Access token secret is not configured`
 - full live auth-to-log path still needs one confirmed end-to-end run from the packaged client
 - packaged build has not yet been tested on a separate clean Windows machine
 
@@ -113,13 +113,11 @@ The deployment path now includes:
 
 ## Recommended Immediate Order
 
-1. Verify Azure `ACCESS_TOKEN_SECRET` is correctly saved and applied.
-2. Restart Azure Web App.
-3. Re-test hosted redeem-code login.
-4. Test one real packaged-client explanation.
-5. Confirm DB inserts.
-6. Validate the bundle on a clean Windows machine.
-7. Start internal pilot.
+1. Test one real packaged-client sign-in.
+2. Test one real packaged-client explanation.
+3. Confirm DB inserts from that packaged-client flow.
+4. Validate the bundle on a clean Windows machine.
+5. Start internal pilot.
 
 ## Definition Of Pilot Ready
 
@@ -129,5 +127,6 @@ The system is pilot ready when all of these are true:
 - session restores after restart
 - authenticated WebSocket explain request works
 - final request log row is written to hosted DB
+- one real packaged-client auth and hotkey flow has been verified
 - thumbs feedback works in overlay
 - no obvious capture or overlay regressions are present

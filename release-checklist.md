@@ -13,7 +13,7 @@
 - Save/apply the settings
 - Restart the Azure Web App
 - Confirm `https://<your-app>/api/health` returns `ok`
-- Confirm `POST /auth/redeem-code` no longer returns `Access token secret is not configured`
+- Confirm `POST /auth/redeem-code` returns tokens for a fresh redeem code
 
 ## 2. Database Readiness
 
@@ -63,6 +63,8 @@
 - Logout works
 - Authenticated WebSocket connect works
 - One full explain request succeeds
+- One real packaged-client sign-in succeeds
+- One real packaged-client hotkey request succeeds
 - Overlay renders correctly
 - Thumbs feedback works for one visible response
 - Final request log row is inserted after completion
