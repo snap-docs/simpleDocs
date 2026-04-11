@@ -78,5 +78,11 @@ namespace CodeExplainer
                 ? Visibility.Visible
                 : Visibility.Collapsed;
         }
+
+        private void CodeInputHost_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            CodeTextBox.Focus();
+            CodeTextBox.Select(CodeTextBox.Text.Length, 0);
+        }
     }
 }
