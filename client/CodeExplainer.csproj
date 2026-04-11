@@ -8,6 +8,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>CodeExplainer</AssemblyName>
     <RootNamespace>CodeExplainer</RootNamespace>
+    <AssemblyTitle>simpleDocs</AssemblyTitle>
+    <Description>simpleDocs desktop assistant</Description>
   </PropertyGroup>
 
   <ItemGroup>

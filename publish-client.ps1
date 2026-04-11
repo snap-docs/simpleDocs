@@ -58,7 +58,7 @@ Set-Content -LiteralPath $launcherPath -Value $launcherContent -Encoding ASCII
 
 $manifestPath = Join-Path $publishDir "release-manifest.json"
 $manifest = @{
-    product = "Code Explainer"
+    product = "simpleDocs"
     version = $Version
     environment = $EnvironmentName
     runtime = $Runtime

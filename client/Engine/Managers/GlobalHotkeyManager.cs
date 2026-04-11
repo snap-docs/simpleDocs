@@ -75,7 +75,7 @@ namespace CodeExplainer.Engine.Managers
             string msg = $"FAILED to register any hotkey. Tried: {attempted}. They may already be in use by another application.";
             RuntimeLog.Error("Hotkey", msg);
             Debug.WriteLine($"[GlobalHotkeyManager] {msg}");
-            MessageBox.Show(msg, "Code Explainer Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(msg, "simpleDocs Error", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         public void Unregister()

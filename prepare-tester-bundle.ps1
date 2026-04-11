@@ -31,7 +31,7 @@ if (Test-Path (Join-Path $projectRoot "pilot-user-guide.md")) {
 
 $readmePath = Join-Path $outputDir "README-FIRST.txt"
 $readme = @"
-Code Explainer tester bundle
+simpleDocs tester bundle
 
 1. Open the app folder
 2. Run Start-CodeExplainer.bat

@@ -52,7 +52,7 @@ namespace CodeExplainer
             // Create overlay (hidden initially)
             _overlayWindow = new OverlayWindow();
 
-            bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in is required to start Code Explainer.");
+            bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in is required to start simpleDocs.");
             if (!authenticated)
             {
                 RuntimeLog.Warn("Auth", "Startup aborted because sign-in was not completed.");
@@ -82,7 +82,7 @@ namespace CodeExplainer
             {
                 Icon = SystemIcons.Information,
                 Visible = true,
-                Text = "Code Explainer - starting up"
+                Text = "simpleDocs - starting up"
             };
 
             var contextMenu = new ContextMenuStrip();
@@ -105,23 +105,23 @@ namespace CodeExplainer
 
             if (_hotkeyManager.IsRegistered)
             {
-                _trayIcon.Text = $"Code Explainer - {_hotkeyManager.RegisteredHotkeyLabel}";
+                _trayIcon.Text = $"simpleDocs - {_hotkeyManager.RegisteredHotkeyLabel}";
 
                 if (!string.Equals(_hotkeyManager.RegisteredHotkeyLabel, GlobalHotkeyManager.PreferredHotkeyLabel, StringComparison.Ordinal))
                 {
                     _trayIcon.ShowBalloonTip(
                         4000,
-                        "Code Explainer",
+                        "simpleDocs",
                         $"Using {_hotkeyManager.RegisteredHotkeyLabel}. {GlobalHotkeyManager.PreferredHotkeyLabel} was already in use.",
                         ToolTipIcon.Info);
                 }
             }
             else
             {
-                _trayIcon.Text = "Code Explainer - no hotkey";
+                _trayIcon.Text = "simpleDocs - no hotkey";
                 _trayIcon.ShowBalloonTip(
                     5000,
-                    "Code Explainer",
+                    "simpleDocs",
                     "No global hotkey could be registered. Close conflicting hotkey apps and relaunch.",
                     ToolTipIcon.Warning);
             }
@@ -366,14 +366,14 @@ namespace CodeExplainer
         {
             if (_config?.AuthEnabled == false)
             {
-                _trayIcon?.ShowBalloonTip(2500, "Code Explainer", "Sign-in is disabled in the current environment.", ToolTipIcon.Info);
+                _trayIcon?.ShowBalloonTip(2500, "simpleDocs", "Sign-in is disabled in the current environment.", ToolTipIcon.Info);
                 return;
             }
 
             bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in to continue.");
             if (authenticated && _trayIcon != null)
             {
-                _trayIcon.ShowBalloonTip(2500, "Code Explainer", "You are signed in.", ToolTipIcon.Info);
+                _trayIcon.ShowBalloonTip(2500, "simpleDocs", "You are signed in.", ToolTipIcon.Info);
             }
         }
 
@@ -381,7 +381,7 @@ namespace CodeExplainer
         {
             if (_config?.AuthEnabled == false)
             {
-                _trayIcon?.ShowBalloonTip(2500, "Code Explainer", "Sign-in is disabled in the current environment.", ToolTipIcon.Info);
+                _trayIcon?.ShowBalloonTip(2500, "simpleDocs", "Sign-in is disabled in the current environment.", ToolTipIcon.Info);
                 return;
             }
 
@@ -396,7 +396,7 @@ namespace CodeExplainer
             bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Enter a redeem code to sign in again.");
             if (!authenticated)
             {
-                _trayIcon?.ShowBalloonTip(3000, "Code Explainer", "You are currently signed out.", ToolTipIcon.Warning);
+                _trayIcon?.ShowBalloonTip(3000, "simpleDocs", "You are currently signed out.", ToolTipIcon.Warning);
             }
         }
 

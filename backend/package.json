@@ -1,7 +1,7 @@
 {
   "name": "code-explainer-backend",
   "version": "1.0.0",
-  "description": "Code Explainer backend — Hono + OpenRouter + Supabase",
+  "description": "simpleDocs backend — Hono + OpenRouter + Supabase",
   "main": "index.js",
   "type": "module",
   "scripts": {

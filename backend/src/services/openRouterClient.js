@@ -5,7 +5,7 @@
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const APP_REFERER = process.env.PUBLIC_APP_URL || 'https://code-explainer.local';
-const APP_TITLE = process.env.PUBLIC_APP_TITLE || 'Code Explainer';
+const APP_TITLE = process.env.PUBLIC_APP_TITLE || 'simpleDocs';
 
 /**
  * Stream a chat completion from OpenRouter.

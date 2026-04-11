@@ -58,7 +58,7 @@ namespace CodeExplainer
                 uint error = GetLastError();
                 string msg = $"[HotkeyManager] FAILED to register Win+Shift+Space hotkey (Win32 error {error}). It may be in use by another application.";
                 Console.WriteLine(msg);
-                MessageBox.Show(msg, "Code Explainer", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(msg, "simpleDocs", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             else
             {
