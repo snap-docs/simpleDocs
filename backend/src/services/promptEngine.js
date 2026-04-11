@@ -88,6 +88,28 @@ WIDGET OUTPUT RULES (STRICT):
 - Do not treat a plain term as broken code just because the surrounding page mentions code, Git, deployment, or tooling.
 - Output plain sentence flow only.`;
 
+function sanitizeContextText(input, maxChars = 10000) {
+  const raw = typeof input === 'string' ? input : '';
+  if (raw.length === 0) return '';
+
+  // UIA and terminal captures can contain:
+  // - U+FFFC object replacement chars (embedded UI elements)
+  // - Private-use glyphs (icon fonts)
+  // - Zero-width joiners
+  // - Non-printable control chars
+  const cleaned = raw
+    .replace(/\r\n/g, '\n')
+    .replace(/\uFFFC/g, '')                        // UIA embedded object placeholders
+    .replace(/[\p{Co}]/gu, '')                     // Unicode private-use (icon glyphs)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')         // zero-width chars
+    .replace(/[\x00-\x08\x0B\x0E-\x1F\x7F]/g, '') // non-printable control chars
+    .replace(/[ \t]{4,}/g, '   ')                  // collapse excessive spaces/tabs
+    .trim();
+
+  if (cleaned.length <= maxChars) return cleaned;
+  return cleaned.substring(0, maxChars);
+}
+
 /**
  * Build the prompt messages for OpenRouter.
  * @param {number} caseType - Case 1-4
@@ -102,13 +124,8 @@ export function buildPrompt(caseType, selectedText, backgroundContext, windowTit
   const baseSystemPrompt = SYSTEM_PROMPTS[caseType] || SYSTEM_PROMPTS[4];
   const systemPrompt = `${baseSystemPrompt}\n${WIDGET_OUTPUT_RULES}`;
 
-  // Strip object replacement chars (U+FFFC = ￼), other non-printable control chars,
-  // and collapse excessive whitespace. Zero latency impact — pure CPU string op.
-  const cleanedBackground = (backgroundContext || '')
-    .replace(/\uFFFC/g, '')                        // remove ￼ (UIA embedded object placeholders)
-    .replace(/[\x00-\x08\x0B\x0E-\x1F\x7F]/g, '') // remove non-printable control chars
-    .replace(/[ \t]{4,}/g, '   ')                  // collapse excessive spaces/tabs
-    .trim();
+  // Sanitize background before sending it to the model to avoid wasting tokens on UI glyphs.
+  const cleanedBackground = sanitizeContextText(backgroundContext, 10000);
 
   let userPrompt = '';
   const hasBackground = cleanedBackground.length > 0 && cleanedBackground !== selectedText;
