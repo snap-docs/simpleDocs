@@ -2,7 +2,7 @@
 
 ## Sign In
 
-1. Launch `Start-CodeExplainer.bat`.
+1. Launch `CodeExplainer.exe`.
 2. Enter the redeem code you received.
 3. Wait for the tray icon to show that the app is ready.
 

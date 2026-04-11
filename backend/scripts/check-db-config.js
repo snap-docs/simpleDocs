@@ -142,8 +142,8 @@ async function main() {
   await checkTable(client, process.env.AUTH_PARTICIPANTS_TABLE || 'participants');
   await checkTable(client, process.env.AUTH_CODES_TABLE || 'redeem_codes');
   await checkTable(client, process.env.AUTH_REFRESH_TOKENS_TABLE || 'refresh_tokens');
-  await checkTable(client, process.env.SESSIONS_TABLE || 'sessions');
   await checkTable(client, process.env.REQUEST_LOGS_TABLE || 'request_logs');
+  await checkTable(client, process.env.REQUEST_FEEDBACK_TABLE || 'request_feedback');
 
   const hasFailures = checks.some((item) => item.status === 'FAIL');
   printAndExit(hasFailures ? 1 : 0);

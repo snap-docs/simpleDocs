@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Http.Headers;
 
 namespace CodeExplainer
 {
@@ -36,7 +37,6 @@ namespace CodeExplainer
             string? statusMessage,
             bool isUnsupported,
             string accessToken,
-            string sessionId,
             string requestId,
             string usageContext,
             Action<string>? onToken = null,
@@ -48,27 +48,31 @@ namespace CodeExplainer
             var streamStopwatch = Stopwatch.StartNew();
             int tokenChunks = 0;
             int tokenChars = 0;
+            string cleanSelectedText = TextSanitizer.SanitizePayloadText(selectedText, 5000);
+            string cleanBackgroundContext = TextSanitizer.SanitizePayloadText(backgroundContext, 12000);
+            string cleanWindowTitle = TextSanitizer.SanitizePayloadText(windowTitle, 400);
+            string cleanProcessName = TextSanitizer.SanitizePayloadText(processName, 100);
+            string cleanStatusMessage = TextSanitizer.SanitizePayloadText(statusMessage, 240);
 
             try
             {
-                using var ws = await ConnectWithRetryAsync(accessToken, requestId, selectedText.Length, backgroundContext.Length, environmentType, selectedMethod, backgroundMethod, isPartial, isUnsupported);
+                using var ws = await ConnectWithRetryAsync(accessToken, requestId, cleanSelectedText.Length, cleanBackgroundContext.Length, environmentType, selectedMethod, backgroundMethod, isPartial, isUnsupported);
                 using var streamCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
                 var payload = new
                 {
-                    session_id         = sessionId,
                     request_id         = requestId,
                     usage_context      = usageContext,
-                    selected_text      = selectedText,
-                    background_context = backgroundContext,
-                    window_title       = windowTitle,
-                    process_name       = processName,
+                    selected_text      = cleanSelectedText,
+                    background_context = cleanBackgroundContext,
+                    window_title       = cleanWindowTitle,
+                    process_name       = cleanProcessName,
                     environment_type   = environmentType,
                     selected_method    = selectedMethod,
                     background_method  = backgroundMethod,
                     is_partial         = isPartial,
                     is_unsupported     = isUnsupported,
-                    status_message     = statusMessage ?? string.Empty,
+                    status_message     = cleanStatusMessage,
                     ocr_used           = ocrUsed,
                     ocr_confidence     = ocrConfidence
                 };
@@ -126,6 +130,49 @@ namespace CodeExplainer
                     onComplete?.Invoke();
                 });
             }
+        }
+
+        public static async Task SendFeedbackAsync(string requestId, string reaction, string accessToken)
+        {
+            string cleanRequestId = TextSanitizer.SanitizePayloadText(requestId, 120);
+            string cleanReaction = reaction?.Trim().ToLowerInvariant() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(cleanRequestId))
+            {
+                throw new InvalidOperationException("Feedback request id is missing.");
+            }
+
+            if (cleanReaction != "up" && cleanReaction != "down")
+            {
+                throw new InvalidOperationException("Feedback reaction must be up or down.");
+            }
+
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri(_config.ApiBaseUrl + "/")
+            };
+
+            if (!string.IsNullOrWhiteSpace(accessToken))
+            {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            }
+
+            using var content = new StringContent(
+                JsonSerializer.Serialize(new
+                {
+                    request_id = cleanRequestId,
+                    reaction = cleanReaction
+                }),
+                Encoding.UTF8,
+                "application/json");
+
+            using HttpResponseMessage response = await client.PostAsync("api/feedback", content);
+            string body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"Feedback request failed: {(int)response.StatusCode} {body}");
+            }
+
+            RuntimeLog.Info("Feedback", $"request_id={cleanRequestId} reaction={cleanReaction} stored=true");
         }
 
         private static async Task<ClientWebSocket> ConnectWithRetryAsync(

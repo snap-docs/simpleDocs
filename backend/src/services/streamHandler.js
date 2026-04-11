@@ -9,6 +9,7 @@ import { buildPrompt } from './promptEngine.js';
 import * as openRouterClient from './openRouterClient.js';
 import * as groqClient from './groqClient.js';
 import { logCompletedRequest } from '../db/requestLogs.js';
+import { sanitizeBackgroundText, sanitizeSelectedText, sanitizeMetadataText } from '../utils/textSanitizer.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -22,7 +23,6 @@ export async function handleStreamRequest(data, ws, authUser = null) {
   let requestStatus = 'completed';
 
   const {
-    session_id,
     request_id,
     usage_context,
     selected_text,
@@ -45,16 +45,13 @@ export async function handleStreamRequest(data, ws, authUser = null) {
     return;
   }
 
-  const cleanSelected = selected_text.trim();
-  const cleanBackground = (background_context || '').substring(0, 12000);
-  const cleanWindowTitle = (window_title || '').substring(0, 400);
-  const cleanProcessName = (process_name || '').substring(0, 100);
-  const cleanSessionId = typeof session_id === 'string' && session_id.trim().length > 0
-    ? session_id.trim().substring(0, 120)
-    : `session_${Date.now()}`;
+  const cleanSelected = sanitizeSelectedText(selected_text.trim(), 5000);
+  const cleanBackground = sanitizeBackgroundText(background_context || '', 12000);
+  const cleanWindowTitle = sanitizeMetadataText(window_title || '', 400);
+  const cleanProcessName = sanitizeMetadataText(process_name || '', 100);
   const cleanRequestId = typeof request_id === 'string' && request_id.trim().length > 0
     ? request_id.trim().substring(0, 120)
-    : `${cleanSessionId}_${Date.now()}`;
+    : `req_${Date.now()}`;
   const cleanUsageContext = typeof usage_context === 'string' && usage_context.trim().length > 0
     ? usage_context.trim().substring(0, 255)
     : fallbackUsageContext(environment_type, cleanProcessName);
@@ -73,7 +70,7 @@ export async function handleStreamRequest(data, ws, authUser = null) {
     : 'unknown';
   const cleanSelectedMethod = typeof selected_method === 'string' ? selected_method.substring(0, 64) : 'unknown';
   const cleanBackgroundMethod = typeof background_method === 'string' ? background_method.substring(0, 64) : 'unknown';
-  const cleanStatusMessage = typeof status_message === 'string' ? status_message.substring(0, 240) : '';
+  const cleanStatusMessage = typeof status_message === 'string' ? sanitizeMetadataText(status_message, 240) : '';
   const cleanOcrUsed = Boolean(ocr_used);
   const cleanOcrConfidence = typeof ocr_confidence === 'number' ? Math.min(Math.max(ocr_confidence, 0), 1) : 0;
   const participantId = String(authUser?.participant_id || authUser?.sub || 'unknown');
@@ -83,7 +80,7 @@ export async function handleStreamRequest(data, ws, authUser = null) {
   const responseParts = [];
   let timeToFirstTokenMs = null;
   logger.info(`[WS] Case ${caseType} | environment: ${cleanEnvironmentType} | selected_method: ${cleanSelectedMethod} | background_method: ${cleanBackgroundMethod}`);
-  logger.info(`[WS] Payload -> request_id=${cleanRequestId} session_id=${cleanSessionId} selected=${cleanSelected.length} chars | background=${cleanBackground.length} chars | process=${cleanProcessName} | title="${cleanWindowTitle}"`);
+  logger.info(`[WS] Payload -> request_id=${cleanRequestId} selected=${cleanSelected.length} chars | background=${cleanBackground.length} chars | process=${cleanProcessName} | title="${cleanWindowTitle}"`);
 
   const { systemPrompt, userPrompt } = buildPrompt(
     caseType,
@@ -134,7 +131,6 @@ export async function handleStreamRequest(data, ws, authUser = null) {
 
   void logCompletedRequest({
     participant_id: participantId,
-    session_id: cleanSessionId,
     request_id: cleanRequestId,
     timestamp: timestampIso,
     environment_type: cleanEnvironmentType,
@@ -144,8 +140,6 @@ export async function handleStreamRequest(data, ws, authUser = null) {
     background_context: cleanBackground,
     selected_method: cleanSelectedMethod,
     background_method: cleanBackgroundMethod,
-    is_partial: Boolean(is_partial),
-    is_unsupported: Boolean(is_unsupported),
     task_type: taskType,
     time_to_first_token_ms: timeToFirstTokenMs,
     total_response_time_ms: totalResponseTimeMs,

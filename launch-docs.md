@@ -75,6 +75,8 @@ The client loads environment-aware config from:
 
 Current staging and production configs now point to the hosted Azure backend.
 
+For published pilot builds, `publish-client.ps1` now stamps the selected environment into the bundled `appsettings.json`, so users can launch `CodeExplainer.exe` directly.
+
 ## Local Development Launch
 
 ### Backend
@@ -106,7 +108,7 @@ npm run check:db
 Manual hosted checks:
 1. open `/api/health`
 2. test `/auth/redeem-code`
-3. verify the packaged app starts with hosted URLs
+3. verify `CodeExplainer.exe` starts with hosted URLs
 
 ## Manual Hosted Verification
 

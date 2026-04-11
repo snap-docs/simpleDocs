@@ -140,6 +140,44 @@ namespace CodeExplainer.Engine.Strategies
             return false;
         }
 
+        public static bool TryGetDocumentRangeTextFromDescendants(int maxChars, out string text)
+        {
+            text = string.Empty;
+            foreach (AutomationElement element in EnumerateFocusedAndAncestors(6))
+            {
+                if (TryGetTextPatternTextFromDescendants(
+                    element,
+                    maxChars,
+                    TryGetDocumentRangeTextFromElement,
+                    out string document))
+                {
+                    text = document;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool TryGetVisibleRangesTextFromDescendants(int maxChars, out string text)
+        {
+            text = string.Empty;
+            foreach (AutomationElement element in EnumerateFocusedAndAncestors(6))
+            {
+                if (TryGetTextPatternTextFromDescendants(
+                    element,
+                    maxChars,
+                    TryGetVisibleRangesTextFromElement,
+                    out string visible))
+                {
+                    text = visible;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public static bool TryGetNearestContainerText(int maxChars, out string text)
         {
             text = string.Empty;
@@ -237,6 +275,57 @@ namespace CodeExplainer.Engine.Strategies
                 if (depth > 0 && TryGetSelectedTextFromElement(element, maxChars, out string selected))
                 {
                     text = selected;
+                    return true;
+                }
+
+                if (depth >= maxDepth)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    AutomationElement? child = walker.GetFirstChild(element);
+                    while (child != null && inspected < maxNodes)
+                    {
+                        queue.Enqueue((child, depth + 1));
+                        child = walker.GetNextSibling(child);
+                    }
+                }
+                catch
+                {
+                    // Ignore traversal failures for individual nodes.
+                }
+            }
+
+            return false;
+        }
+
+        private delegate bool TextPatternExtractor(AutomationElement element, int maxChars, out string text);
+
+        private static bool TryGetTextPatternTextFromDescendants(
+            AutomationElement root,
+            int maxChars,
+            TextPatternExtractor extractor,
+            out string text)
+        {
+            text = string.Empty;
+            var walker = TreeWalker.RawViewWalker;
+            var queue = new Queue<(AutomationElement element, int depth)>();
+            queue.Enqueue((root, 0));
+
+            int inspected = 0;
+            const int maxNodes = 500;
+            const int maxDepth = 5;
+
+            while (queue.Count > 0 && inspected < maxNodes)
+            {
+                (AutomationElement element, int depth) = queue.Dequeue();
+                inspected++;
+
+                if (depth > 0 && !LooksLikeNonEditorPanel(element) && extractor(element, maxChars, out string candidate))
+                {
+                    text = candidate;
                     return true;
                 }
 

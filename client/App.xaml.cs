@@ -51,6 +51,7 @@ namespace CodeExplainer
 
             // Create overlay (hidden initially)
             _overlayWindow = new OverlayWindow();
+            _overlayWindow.FeedbackHandler = SubmitFeedbackAsync;
 
             bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in is required to start simpleDocs.");
             if (!authenticated)
@@ -250,7 +251,7 @@ namespace CodeExplainer
 
                 string streamRequestId = _authSessionManager.BuildRequestId(requestId);
                 RuntimeLog.Info("Backend", $"req={requestId} Sending capture payload to backend.");
-                _overlayWindow?.ShowLoading(BuildStatusLabel(captureResult), requestId);
+                _overlayWindow?.ShowLoading(BuildStatusLabel(captureResult), streamRequestId);
 
                 await BackendClient.SendExplainRequest(
                     captureResult.SelectedText,
@@ -264,7 +265,6 @@ namespace CodeExplainer
                     captureResult.StatusMessage,
                     captureResult.IsUnsupported,
                     accessToken,
-                    _authSessionManager.SessionId,
                     streamRequestId,
                     captureResult.UsageContext,
                     token => _overlayWindow?.AppendToken(token),
@@ -280,6 +280,32 @@ namespace CodeExplainer
                 _overlayWindow?.ShowMessage(
                     captureResult.StatusMessage,
                     BuildStatusLabel(captureResult));
+            }
+        }
+
+        private async Task<bool> SubmitFeedbackAsync(string requestId, string reaction)
+        {
+            if (_authSessionManager == null || _config?.AuthEnabled == false)
+            {
+                RuntimeLog.Warn("Feedback", $"request_id={requestId} reaction={reaction} auth_not_available");
+                return false;
+            }
+
+            try
+            {
+                string accessToken = await _authSessionManager.EnsureValidAccessTokenAsync();
+                await BackendClient.SendFeedbackAsync(requestId, reaction, accessToken);
+                return true;
+            }
+            catch (SessionExpiredException ex)
+            {
+                RuntimeLog.Warn("Feedback", $"request_id={requestId} reaction={reaction} session_expired=\"{ex.Message}\"");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error("Feedback", $"request_id={requestId} reaction={reaction} failed=\"{ex.Message}\"");
+                return false;
             }
         }
 

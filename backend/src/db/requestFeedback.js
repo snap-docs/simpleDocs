@@ -15,7 +15,7 @@ function getClient() {
       url === 'https://your-project.supabase.co' ||
       key === 'your_supabase_service_role_key_here' ||
       key === 'your_supabase_anon_key_here') {
-    logger.warn('Request logging DB is not configured');
+    logger.warn('Request feedback DB is not configured');
     return null;
   }
 
@@ -31,31 +31,43 @@ function getClient() {
 
 function getConfig() {
   return {
-    requestLogsTable: process.env.REQUEST_LOGS_TABLE || 'request_logs'
+    requestFeedbackTable: process.env.REQUEST_FEEDBACK_TABLE || 'request_feedback'
   };
 }
 
-export async function logCompletedRequest(record) {
+export async function saveRequestFeedback(record) {
   if (!record?.participant_id || record.participant_id === 'unknown' || record.participant_id === 'local-dev') {
-    logger.warn('Skipping request log because participant_id is unavailable');
-    return;
+    logger.warn('Skipping request feedback because participant_id is unavailable');
+    return false;
+  }
+
+  if (!record?.request_id || !record?.reaction) {
+    logger.warn('Skipping request feedback because request_id or reaction is unavailable');
+    return false;
   }
 
   const client = getClient();
   if (!client) {
-    return;
+    return false;
   }
 
   const config = getConfig();
+
   try {
     const { error } = await client
-      .from(config.requestLogsTable)
-      .insert(record);
+      .from(config.requestFeedbackTable)
+      .upsert(record, {
+        onConflict: 'request_id,participant_id'
+      });
 
     if (error) {
-      logger.error(`Request log insert failed: ${error.message}`);
+      logger.error(`Request feedback upsert failed: ${error.message}`);
+      return false;
     }
+
+    return true;
   } catch (err) {
-    logger.error(`Request logging failed: ${err.message}`);
+    logger.error(`Request feedback save failed: ${err.message}`);
+    return false;
   }
 }

@@ -17,12 +17,15 @@ namespace CodeExplainer
 
         public static ClientConfig Load()
         {
+            var settings = new ConfigFileModel();
+            ConfigFileModel baseSettings = ReadConfigFile("appsettings.json");
+            Merge(settings, baseSettings);
+
             string environmentName =
                 Environment.GetEnvironmentVariable("CODE_EXPLAINER_ENV")?.Trim()
+                ?? baseSettings.Environment?.Trim()
                 ?? "Development";
 
-            var settings = new ConfigFileModel();
-            Merge(settings, ReadConfigFile("appsettings.json"));
             Merge(settings, ReadConfigFile($"appsettings.{environmentName}.json"));
 
             string apiBaseUrl = GetEnvOverride("CODE_EXPLAINER_API_BASE_URL")

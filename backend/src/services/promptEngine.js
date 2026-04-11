@@ -1,3 +1,5 @@
+import { sanitizeBackgroundText, sanitizeSelectedText, sanitizeMetadataText } from '../utils/textSanitizer.js';
+
 /**
  * Builds case-specific prompts for OpenRouter.
  * 
@@ -88,28 +90,6 @@ WIDGET OUTPUT RULES (STRICT):
 - Do not treat a plain term as broken code just because the surrounding page mentions code, Git, deployment, or tooling.
 - Output plain sentence flow only.`;
 
-function sanitizeContextText(input, maxChars = 10000) {
-  const raw = typeof input === 'string' ? input : '';
-  if (raw.length === 0) return '';
-
-  // UIA and terminal captures can contain:
-  // - U+FFFC object replacement chars (embedded UI elements)
-  // - Private-use glyphs (icon fonts)
-  // - Zero-width joiners
-  // - Non-printable control chars
-  const cleaned = raw
-    .replace(/\r\n/g, '\n')
-    .replace(/\uFFFC/g, '')                        // UIA embedded object placeholders
-    .replace(/[\p{Co}]/gu, '')                     // Unicode private-use (icon glyphs)
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')         // zero-width chars
-    .replace(/[\x00-\x08\x0B\x0E-\x1F\x7F]/g, '') // non-printable control chars
-    .replace(/[ \t]{4,}/g, '   ')                  // collapse excessive spaces/tabs
-    .trim();
-
-  if (cleaned.length <= maxChars) return cleaned;
-  return cleaned.substring(0, maxChars);
-}
-
 /**
  * Build the prompt messages for OpenRouter.
  * @param {number} caseType - Case 1-4
@@ -125,15 +105,18 @@ export function buildPrompt(caseType, selectedText, backgroundContext, windowTit
   const systemPrompt = `${baseSystemPrompt}\n${WIDGET_OUTPUT_RULES}`;
 
   // Sanitize background before sending it to the model to avoid wasting tokens on UI glyphs.
-  const cleanedBackground = sanitizeContextText(backgroundContext, 10000);
+  const cleanedBackground = sanitizeBackgroundText(backgroundContext, 10000);
+  const cleanedSelected = sanitizeSelectedText(selectedText, 5000);
+  const cleanedWindowTitle = sanitizeMetadataText(windowTitle, 400);
+  const cleanedProcessName = sanitizeMetadataText(processName, 100);
 
   let userPrompt = '';
   const hasBackground = cleanedBackground.length > 0 && cleanedBackground !== selectedText;
 
   userPrompt += `[System Logging Metadata - DO NOT explain this to the user unless they ask about it]
 - Environment: ${environmentType}
-- Process: ${processName || 'unknown'}
-- Window Title: ${windowTitle || 'unknown'}\n\n`;
+- Process: ${cleanedProcessName || 'unknown'}
+- Window Title: ${cleanedWindowTitle || 'unknown'}\n\n`;
 
   if (hasBackground) {
     userPrompt += `BACKGROUND CONTEXT (separate pipeline):\n\`\`\`\n${cleanedBackground.substring(0, 10000)}\n\`\`\`\n\n`;
@@ -142,7 +125,7 @@ export function buildPrompt(caseType, selectedText, backgroundContext, windowTit
     userPrompt += "BACKGROUND CONTEXT: not available. Explain the meaning of the SELECTED TEXT as a standalone concept. DO NOT invent connections between the selected text and the System Logging Metadata.\n\n";
   }
 
-  userPrompt += `SELECTED TEXT (the user highlighted this and wants it explained):\n\`\`\`\n${selectedText}\n\`\`\``;
+  userPrompt += `SELECTED TEXT (the user highlighted this and wants it explained):\n\`\`\`\n${cleanedSelected}\n\`\`\``;
 
   if (ocrUsed) {
     const pct = Math.round(ocrConfidence * 100);

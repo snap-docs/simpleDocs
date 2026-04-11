@@ -42,12 +42,13 @@
 1. Run:
    `.\publish-client.ps1 -Configuration Release -Runtime win-x64 -EnvironmentName Production`
 2. Confirm output exists in `dist/client/`
-3. Confirm `Start-CodeExplainer.bat` exists
-4. Confirm production `appsettings` files are present
-5. Run:
+3. Confirm `CodeExplainer.exe` opens directly with hosted production settings
+4. Confirm `Start-CodeExplainer.bat` exists as an optional launcher
+5. Confirm production `appsettings` files are present
+6. Run:
    `.\prepare-tester-bundle.ps1 -EnvironmentName Production`
-6. Confirm output exists in `dist/tester-bundle/`
-7. Launch once on a clean Windows machine
+7. Confirm output exists in `dist/tester-bundle/`
+8. Launch once on a clean Windows machine
 
 ### Backend
 1. Run:

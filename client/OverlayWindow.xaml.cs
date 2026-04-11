@@ -24,10 +24,11 @@ namespace CodeExplainer
         private const double NeutralOpacity = 0.72;
         private const double DimmedOpacity = 0.34;
         private const double SelectedOpacity = 1.0;
-        private int? _currentRequestId;
+        private string? _currentRequestId;
         private bool _feedbackSubmitted;
         private bool _isResponseVisible;
         private string? _selectedReaction;
+        public Func<string, string, Task<bool>>? FeedbackHandler { get; set; }
 
         public OverlayWindow()
         {
@@ -62,7 +63,7 @@ namespace CodeExplainer
         /// <summary>
         /// Shows the overlay in loading state near the current mouse position.
         /// </summary>
-        public void ShowLoading(string statusLabel = "", int? requestId = null)
+        public void ShowLoading(string statusLabel = "", string? requestId = null)
         {
             Dispatcher.Invoke(() =>
             {
@@ -165,19 +166,19 @@ namespace CodeExplainer
             HideFeedback();
         }
 
-        private void ThumbsUpButton_Click(object sender, RoutedEventArgs e)
+        private async void ThumbsUpButton_Click(object sender, RoutedEventArgs e)
         {
-            SubmitFeedback("up");
+            await SubmitFeedbackAsync("up");
             e.Handled = true;
         }
 
-        private void ThumbsDownButton_Click(object sender, RoutedEventArgs e)
+        private async void ThumbsDownButton_Click(object sender, RoutedEventArgs e)
         {
-            SubmitFeedback("down");
+            await SubmitFeedbackAsync("down");
             e.Handled = true;
         }
 
-        private void SubmitFeedback(string reaction)
+        private async Task SubmitFeedbackAsync(string reaction)
         {
             if (_feedbackSubmitted || !_isResponseVisible)
             {
@@ -189,10 +190,37 @@ namespace CodeExplainer
             UpdateFeedbackButtons();
 
             string message =
-                $"req={_currentRequestId?.ToString() ?? "-"} reaction={reaction} status=\"{RuntimeLog.Preview(CaseLabel.Text, 80)}\" " +
+                $"req={_currentRequestId ?? "-"} reaction={reaction} status=\"{RuntimeLog.Preview(CaseLabel.Text, 80)}\" " +
                 $"response_chars={ResponseText.Text.Length} response_preview=\"{RuntimeLog.Preview(ResponseText.Text, 160)}\"";
 
             _ = Task.Run(() => RuntimeLog.Info("Feedback", message));
+
+            if (string.IsNullOrWhiteSpace(_currentRequestId) || FeedbackHandler == null)
+            {
+                _feedbackSubmitted = false;
+                _selectedReaction = null;
+                UpdateFeedbackButtons();
+                RuntimeLog.Warn("Feedback", "Feedback was not sent because request_id or handler was unavailable.");
+                return;
+            }
+
+            try
+            {
+                bool stored = await FeedbackHandler.Invoke(_currentRequestId, reaction);
+                if (!stored)
+                {
+                    _feedbackSubmitted = false;
+                    _selectedReaction = null;
+                    UpdateFeedbackButtons();
+                }
+            }
+            catch (Exception ex)
+            {
+                _feedbackSubmitted = false;
+                _selectedReaction = null;
+                UpdateFeedbackButtons();
+                RuntimeLog.Error("Feedback", $"Failed to store feedback: {ex.Message}");
+            }
         }
 
         private void ApplyCompactColorFormatting()

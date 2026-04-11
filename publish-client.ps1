@@ -48,6 +48,12 @@ if ($LASTEXITCODE -ne 0) {
     throw "Client publish failed with exit code $LASTEXITCODE."
 }
 
+$publishedBaseConfigPath = Join-Path $publishDir "appsettings.json"
+$publishedEnvironmentConfigPath = Join-Path $publishDir "appsettings.$EnvironmentName.json"
+if (Test-Path $publishedEnvironmentConfigPath) {
+    Copy-Item -LiteralPath $publishedEnvironmentConfigPath -Destination $publishedBaseConfigPath -Force
+}
+
 $launcherPath = Join-Path $publishDir "Start-CodeExplainer.bat"
 $launcherContent = @"
 @echo off
@@ -68,4 +74,5 @@ $manifest = @{
 Set-Content -LiteralPath $manifestPath -Value $manifest -Encoding ASCII
 
 Write-Host "Client publish complete."
+Write-Host "Default EXE environment: $EnvironmentName"
 Write-Host "Environment launcher: $launcherPath"

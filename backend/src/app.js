@@ -4,6 +4,7 @@ import { createNodeWebSocket } from '@hono/node-ws';
 import { healthRoute } from './routes/health.js';
 import { createExplainRoute } from './routes/explain.js';
 import { createAuthRoute } from './routes/auth.js';
+import { createFeedbackRoute } from './routes/feedback.js';
 import { authMiddleware } from './middleware/auth.js';
 import { authenticateRequest } from './services/authService.js';
 
@@ -20,10 +21,12 @@ export function createApp() {
 
   // Auth middleware for protected routes
   app.use('/api/explain', authMiddleware);
+  app.use('/api/feedback', authMiddleware);
 
   // REST endpoint for explain
   const explainRoute = createExplainRoute();
   app.route('/api', explainRoute);
+  app.route('/api', createFeedbackRoute());
 
   // WebSocket endpoint for streaming
   app.get('/ws/stream', async (c) => {

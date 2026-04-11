@@ -28,15 +28,23 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "launch-docs.md") -Destination (J
 if (Test-Path (Join-Path $projectRoot "pilot-user-guide.md")) {
     Copy-Item -LiteralPath (Join-Path $projectRoot "pilot-user-guide.md") -Destination (Join-Path $outputDir "docs\pilot-user-guide.md") -Force
 }
+if (Test-Path (Join-Path $projectRoot "final-tester-package-guide.md")) {
+    Copy-Item -LiteralPath (Join-Path $projectRoot "final-tester-package-guide.md") -Destination (Join-Path $outputDir "docs\final-tester-package-guide.md") -Force
+}
+if (Test-Path (Join-Path $projectRoot "chatgpt-tester-plan-prompt.md")) {
+    Copy-Item -LiteralPath (Join-Path $projectRoot "chatgpt-tester-plan-prompt.md") -Destination (Join-Path $outputDir "docs\chatgpt-tester-plan-prompt.md") -Force
+}
 
 $readmePath = Join-Path $outputDir "README-FIRST.txt"
 $readme = @"
 simpleDocs tester bundle
 
 1. Open the app folder
-2. Run Start-CodeExplainer.bat
+2. Run CodeExplainer.exe
 3. Enter the redeem code you received
 4. Use the configured hotkey inside your normal workflow
+
+Optional: Start-CodeExplainer.bat also works.
 
 Environment: $EnvironmentName
 "@

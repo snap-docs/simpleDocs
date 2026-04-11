@@ -35,7 +35,7 @@ namespace CodeExplainer.Engine.Strategies
                 allowMsaaFocusedFallback: false);
 
             CapturePipelines.BackgroundCaptureOutcome background =
-                CapturePipelines.CaptureEditorBackground(window, maxChars: 10000);
+                CapturePipelines.CaptureEditorBackground(window, maxChars: 10000, selectedTextHint: selected.Text);
 
             if (ShouldDemoteWeakMsaaSelection(selected, background))
             {

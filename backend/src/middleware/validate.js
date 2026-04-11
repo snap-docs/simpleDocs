@@ -1,3 +1,5 @@
+import { sanitizeBackgroundText, sanitizeSelectedText, sanitizeMetadataText } from '../utils/textSanitizer.js';
+
 /**
  * Request validation middleware for /api/explain.
  * Sanitises input, rejects empty selections, trims oversize content.
@@ -30,17 +32,17 @@ export async function validateExplainRequest(c, next) {
   }
 
   // Trim oversize inputs
-  const cleanSelected = stripNonPrintable(selected_text.trim()).substring(0, 5000);
+  const cleanSelected = sanitizeSelectedText(selected_text.trim(), 5000);
   const cleanBackground = background_context
-    ? stripNonPrintable(background_context).substring(0, 12000)
+    ? sanitizeBackgroundText(background_context, 12000)
     : '';
 
   const cleanWindowTitle = typeof window_title === 'string'
-    ? stripNonPrintable(window_title).substring(0, 400)
+    ? sanitizeMetadataText(window_title, 400)
     : '';
 
   const cleanProcessName = typeof process_name === 'string'
-    ? stripNonPrintable(process_name).substring(0, 100)
+    ? sanitizeMetadataText(process_name, 100)
     : '';
 
   const validEnvironmentTypes = [
@@ -66,15 +68,8 @@ export async function validateExplainRequest(c, next) {
     background_method: typeof background_method === 'string' ? background_method.substring(0, 64) : 'unknown',
     is_partial: Boolean(is_partial),
     is_unsupported: Boolean(is_unsupported),
-    status_message: typeof status_message === 'string' ? stripNonPrintable(status_message).substring(0, 240) : ''
+    status_message: typeof status_message === 'string' ? sanitizeMetadataText(status_message, 240) : ''
   });
 
   return next();
-}
-
-/**
- * Strip non-printable characters (except newlines and tabs).
- */
-function stripNonPrintable(str) {
-  return str.replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]/g, '');
 }

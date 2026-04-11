@@ -21,10 +21,7 @@ namespace CodeExplainer
             _config = config;
             _authApiClient = new AuthApiClient(config);
             _tokenStore = new SecureTokenStore();
-            SessionId = Guid.NewGuid().ToString("N");
         }
-
-        public string SessionId { get; }
 
         public string? CurrentParticipantId
         {
@@ -121,7 +118,9 @@ namespace CodeExplainer
 
         public string BuildRequestId(int requestSequence)
         {
-            return $"{SessionId}-{requestSequence:D4}";
+            string suffix = Guid.NewGuid().ToString("N").Substring(0, 10);
+            long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            return $"req-{timestamp}-{requestSequence:D4}-{suffix}";
         }
 
         private void Persist(string accessToken, string refreshToken)
