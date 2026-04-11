@@ -1,6 +1,6 @@
 # Balance Work
 
-This document lists the remaining work in detail so we can move from near-deployment to a stable pilot release without changing the core architecture.
+This document tracks the real remaining work after backend hosting, client packaging, and hosted health verification.
 
 ## 1. Current Position
 
@@ -15,62 +15,51 @@ This document lists the remaining work in detail so we can move from near-deploy
 - hosted Supabase connectivity is working
 - DB tables are reachable
 - redeem codes are seeded in hosted DB
-- backend health endpoint is responding locally
+- Azure App Service backend is deployed
+- hosted `/api/health` responds with `ok`
+- client staging and production config point to the hosted Azure backend
 - client debug build succeeds
-- client publish script succeeds
-- backend packaging script succeeds
-- tester bundle script succeeds
+- client production publish succeeds
+- tester bundle build succeeds
+- sign-in UI has been polished
 - packaging/support scripts are present
 
 ### Still not fully finished
-- client staging/production backend URLs are still placeholders
-- one full real WPF client run against the hosted backend is still pending
-- packaged build still needs to be tested on a clean Windows machine
-- final pilot environment verification still needs to be completed
+- hosted auth is blocked because `/auth/redeem-code` returns `Access token secret is not configured`
+- one full packaged-client login against the hosted backend is still pending
+- one full packaged-client explanation request is still pending
+- hosted DB verification from the packaged-client flow is still pending
+- packaged build still needs validation on a separate clean Windows machine
 
 ## 2. Remaining Work By Priority
 
 ## Priority A: Must Complete Before Pilot
 
-### A1. Seed redeem codes
-Status: done
-
-Work:
-- verify codes remain visible in hosted DB
-- assign tester-code tracking sheet
-
-Why it matters:
-- without redeem codes, no tester can sign in
-
-Done when:
-- codes exist in `redeem_codes`
-- one code can be redeemed once and cannot be reused
-
-### A2. Replace client placeholder URLs
+### A1. Fix hosted auth configuration
 Status: not done
 
-Files:
-- `client/appsettings.Staging.json`
-- `client/appsettings.Production.json`
-
 Work:
-- replace `https://staging-api.example.com`
-- replace `https://api.example.com`
-- replace matching `wss://...` URLs
+- verify Azure `ACCESS_TOKEN_SECRET` exists with the correct name
+- make sure the value is not blank or placeholder
+- apply/save Azure environment variables
+- restart the Azure Web App
+- re-test `POST /auth/redeem-code`
 
 Why it matters:
-- packaged clients will not connect to the real backend otherwise
+- no tester can sign in until hosted auth works
 
 Done when:
-- client starts and points to the real hosted backend in staging/production mode
+- hosted redeem-code login returns tokens instead of `500`
 
-### A3. Full hosted auth verification
+### A2. Full hosted auth verification
 Status: partly done
 
 Work:
-- verify the same flow from the real WPF login UI
+- test redeem-code login from the real WPF login UI
 - test invalid code behavior
-- test expired/revoked session behavior
+- test used code behavior
+- test app restart with stored session
+- test logout and refresh against hosted backend
 
 Why it matters:
 - auth code exists, but pilot readiness requires live behavior verification
@@ -78,7 +67,7 @@ Why it matters:
 Done when:
 - sign-in, restart, refresh, and logout work against hosted backend from the real app
 
-### A4. Full hosted explain verification
+### A3. Full hosted explain verification
 Status: partly done
 
 Work:
@@ -89,12 +78,12 @@ Work:
 - verify overlay remains responsive
 
 Why it matters:
-- this confirms the real deployment path, not just local builds
+- this confirms the real deployment path, not just health checks and local builds
 
 Done when:
 - one end-to-end hosted explanation succeeds from the real WPF client flow
 
-### A5. DB request logging verification
+### A4. DB request logging verification
 Status: partly done
 
 Work:
@@ -129,8 +118,8 @@ Status: mostly done
 
 Work:
 - verify the published client on a clean Windows machine
-- verify packaged bundle on a clean Windows machine
-- confirm launcher works
+- verify tester-bundle launch on a clean Windows machine
+- confirm launcher works outside the dev machine
 - confirm no dev-only files are required
 
 Done when:
@@ -216,21 +205,19 @@ Work:
 
 ## 4. Suggested Execution Order
 
-1. seed redeem codes
-2. replace client staging/production URLs
-3. run backend hosted env check
-4. test redeem login from the real WPF client
-5. test one full explanation from the real WPF client
-6. verify DB rows
-7. verify the packaged release on a clean Windows machine
-8. internal pilot
-9. fix pilot issues
-10. external pilot
+1. fix Azure `ACCESS_TOKEN_SECRET`
+2. re-test hosted redeem login
+3. test one full explanation from the real WPF client
+4. verify DB rows
+5. verify the packaged release on a clean Windows machine
+6. internal pilot
+7. fix pilot issues
+8. external pilot
 
 ## 5. Deployment Blockers Right Now
 
 These are the real blockers preventing a true pilot release today:
-- client production/staging URLs not finalized
+- hosted `/auth/redeem-code` still fails because Azure auth secret handling is not correct yet
 - no confirmed end-to-end live auth + explain + DB log test yet from the real WPF client
 - packaged build has not yet been validated on a clean tester machine
 

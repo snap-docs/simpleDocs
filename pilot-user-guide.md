@@ -27,7 +27,8 @@ For pilot testing, use the tool only on content that is allowed for the study.
 1. Check that your internet connection is working.
 2. Close and reopen the app.
 3. If sign-in fails, verify the redeem code with support.
-4. If the app still fails, export a support bundle and send it to the team.
+4. If sign-in still fails after the code is confirmed, tell support that the hosted sign-in flow failed.
+5. If the app still fails, export a support bundle and send it to the team.
 
 ## Export Support Bundle
 

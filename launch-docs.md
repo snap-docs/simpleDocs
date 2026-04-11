@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This guide explains how to launch the current system in development, staging, and pilot environments without changing the core architecture.
+This guide explains how to launch the current system in development, hosted validation, and pilot environments without changing the core architecture.
 
 ## Supported Runtime Shape
 
@@ -13,13 +13,25 @@ The current intended runtime is:
 
 For local development, localhost is still supported.
 
+## Current Hosted State
+
+Verified now:
+- Azure App Service backend is deployed
+- hosted health endpoint responds
+- production tester bundle launches
+- production tester bundle points to the hosted Azure backend
+
+Current blocker:
+- hosted `/auth/redeem-code` still fails with `Access token secret is not configured`
+
 ## Prerequisites
 
 ### Backend host
-- Node.js 22+
+- Azure App Service
+- Node.js runtime configured by App Service
 - internet access to the selected AI provider
 - internet access to Supabase
-- real backend `.env` values
+- real backend environment values in Azure
 
 ### Client machine
 - Windows 10 or Windows 11
@@ -28,12 +40,10 @@ For local development, localhost is still supported.
 
 ## Backend Environment Setup
 
-Create `backend/.env` from `backend/.env.example`.
-
-### Minimum hosted setup
+Azure App Service environment variables should include at least:
 
 ```env
-PORT=3000
+APP_ENV=production
 AI_PROVIDER=groq
 GROQ_API_KEY=your_real_groq_key
 SUPABASE_URL=https://your-project.supabase.co
@@ -41,13 +51,14 @@ SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ACCESS_TOKEN_SECRET=your_random_secret
 SKIP_AUTH=false
+PUBLIC_APP_URL=https://your-azure-app.azurewebsites.net
 ```
 
 ### Important notes
 - `SKIP_AUTH=false` is required for hosted pilot deployment.
 - `SUPABASE_SERVICE_ROLE_KEY` should be present for auth and logging reliability.
 - `ACCESS_TOKEN_SECRET` should be your own generated backend secret.
-- `SUPABASE_ANON_KEY` is still useful for connectivity checks, but service-role access is the deployment path.
+- after changing Azure env vars, save/apply and restart the Web App
 
 ## Client Config Setup
 
@@ -56,9 +67,7 @@ The client loads environment-aware config from:
 - `client/appsettings.Staging.json`
 - `client/appsettings.Production.json`
 
-Before staging or production launch, replace placeholder URLs in:
-- `ApiBaseUrl`
-- `WsBaseUrl`
+Current staging and production configs now point to the hosted Azure backend.
 
 ## Local Development Launch
 
@@ -78,11 +87,6 @@ dotnet build client\CodeExplainer.csproj -nologo
 dotnet run --project client\CodeExplainer.csproj
 ```
 
-### Local dev behavior
-- `appsettings.json` currently allows auth-disabled local development mode
-- this is intended only for development convenience
-- hosted testing should use staging/production config with auth enabled
-
 ## Hosted Readiness Check
 
 Run:
@@ -93,32 +97,31 @@ npm run check
 npm run check:db
 ```
 
-Expected result:
-- auth configuration OK
-- Supabase reachable
-- tables reachable
-- no syntax check failures
+Manual hosted checks:
+1. open `/api/health`
+2. test `/auth/redeem-code`
+3. verify the packaged app starts with hosted URLs
 
-## Manual Staging Verification
+## Manual Hosted Verification
 
 Before handing a build to testers, verify these manually:
 
-1. backend starts cleanly
-2. health endpoint responds
-3. redeem-code login succeeds
-4. access token refresh works after restart
-5. authenticated WebSocket connect succeeds
-6. one explanation is streamed back
-7. `participants`, `refresh_tokens`, `sessions`, and `request_logs` receive expected rows
-8. logout revokes the refresh token cleanly
+1. backend health endpoint responds
+2. redeem-code login succeeds
+3. access token refresh works after restart
+4. authenticated WebSocket connect succeeds
+5. one explanation is streamed back
+6. `participants`, `refresh_tokens`, `sessions`, and `request_logs` receive expected rows
+7. logout revokes the refresh token cleanly
 
 ## Suggested Pilot Launch Path
 
-1. build the client bundle
-2. package the backend or deploy the hosted backend
-3. seed tester redeem codes
-4. verify one end-to-end login + explain flow
-5. hand the packaged client to internal pilot users first
+1. fix hosted auth secret handling
+2. verify hosted redeem-code login
+3. verify one packaged-client explain flow
+4. verify DB rows
+5. validate the tester bundle on a clean Windows machine
+6. hand the packaged client to internal pilot users first
 
 ## Support Inputs To Collect
 
@@ -132,6 +135,6 @@ If a pilot tester reports an issue, collect:
 
 ## Known Remaining Launch Gaps
 
-- staging and production client URLs still need final real values
-- redeem codes still need to be seeded for pilot users
+- Azure auth secret handling still blocks hosted redeem-code login
 - one confirmed live auth-to-log path is still required before external rollout
+- tester bundle still needs validation on a separate clean machine

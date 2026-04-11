@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-The project is in late pre-deployment / pilot-preparation stage.
+The project is now in hosted pilot-preparation stage.
 
 The main application flow is already preserved and working in its intended structure:
 - Windows WPF client
@@ -11,7 +11,10 @@ The main application flow is already preserved and working in its intended struc
 - WebSocket streaming
 - overlay response UI
 
-The system is no longer just local-only in design. The deployment path now includes hosted auth and hosted request logging.
+The deployment path now includes:
+- Azure App Service for the backend
+- Supabase/Postgres for auth/session/request logging
+- packaged Windows client for testers
 
 ## What Is Already Implemented
 
@@ -35,6 +38,7 @@ The system is no longer just local-only in design. The deployment path now inclu
 - request log table path
 - session/request id flow
 - async post-response request logging
+- redeem codes seeded in hosted DB
 
 ### Packaging and support
 - client publish script
@@ -43,21 +47,29 @@ The system is no longer just local-only in design. The deployment path now inclu
 - support bundle export script
 - release checklist and pilot guide
 
+### Hosting
+- Azure App Service backend deployment workflow exists
+- Azure backend is live
+- `/api/health` works from the hosted URL
+- client staging/production config points to the Azure backend
+- production tester bundle launches successfully
+
 ## What Still Needs To Be Done
 
 ### Must do before external users
-1. Seed redeem codes into `redeem_codes`.
-2. Replace placeholder staging/production backend URLs in the client config files.
-3. Run one real redeem-code login against the hosted backend.
-4. Run one full explain request and confirm DB rows are written.
-5. Confirm logout and refresh behavior.
-6. Build and verify the final packaged tester bundle.
+1. Fix hosted auth configuration so `/auth/redeem-code` succeeds.
+2. Run one real redeem-code login from the packaged WPF client.
+3. Run one full explain request from the packaged WPF client.
+4. Confirm DB rows are written to `participants`, `refresh_tokens`, `sessions`, and `request_logs`.
+5. Confirm logout and refresh behavior against the hosted backend.
+6. Verify the packaged tester bundle on a clean Windows machine.
 
 ### Should do before broader rollout
 1. Validate on multiple Windows versions and DPI settings.
 2. Validate on VS Code, browser, Windows Terminal, and classic terminal.
 3. Confirm support process for logs and tester issues.
 4. Freeze one build for the pilot.
+5. Rotate any development API keys before external users.
 
 ## Deployment Phases
 
@@ -66,9 +78,11 @@ The system is no longer just local-only in design. The deployment path now inclu
 - schema applied
 - service-role and access-token secrets configured
 - redeem codes seeded
+- Azure backend deployed
 
-### Phase 2: Staging validation
-- client points to real staging API / WebSocket URLs
+### Phase 2: Hosted validation
+- client points to real hosted API / WebSocket URLs
+- hosted health endpoint works
 - one redeem-code login works
 - one request writes to `participants`, `refresh_tokens`, `sessions`, and `request_logs`
 - WebSocket auth works with the live backend
@@ -88,9 +102,9 @@ The system is no longer just local-only in design. The deployment path now inclu
 ## Current Risks
 
 ### Technical risks
-- staging and production client URLs are still placeholders
-- redeem codes are not seeded yet
-- full live auth-to-log path still needs one confirmed end-to-end run
+- hosted `/auth/redeem-code` currently returns `Access token secret is not configured`
+- full live auth-to-log path still needs one confirmed end-to-end run from the packaged client
+- packaged build has not yet been tested on a separate clean Windows machine
 
 ### Operational risks
 - API keys in local env should be rotated before real-user rollout
@@ -99,20 +113,19 @@ The system is no longer just local-only in design. The deployment path now inclu
 
 ## Recommended Immediate Order
 
-1. Seed `redeem_codes`.
-2. Replace client staging/production URLs.
-3. Start hosted backend with final env values.
-4. Test redeem-code login.
-5. Test one real explanation.
-6. Confirm DB inserts.
-7. Produce final tester bundle.
-8. Start internal pilot.
+1. Verify Azure `ACCESS_TOKEN_SECRET` is correctly saved and applied.
+2. Restart Azure Web App.
+3. Re-test hosted redeem-code login.
+4. Test one real packaged-client explanation.
+5. Confirm DB inserts.
+6. Validate the bundle on a clean Windows machine.
+7. Start internal pilot.
 
 ## Definition Of Pilot Ready
 
 The system is pilot ready when all of these are true:
 - client packaged build launches cleanly
-- redeem-code login works
+- redeem-code login works against the hosted backend
 - session restores after restart
 - authenticated WebSocket explain request works
 - final request log row is written to hosted DB

@@ -2,7 +2,7 @@
 
 This repository contains a Windows-first OS-level assistant that explains highlighted code, browser text, and terminal output inside a floating overlay without forcing the user to switch windows.
 
-The current system keeps the original core architecture intact:
+The core architecture remains intentionally unchanged:
 - C# / .NET 8 / WPF desktop client
 - Native Windows capture pipeline using UIA, MSAA, clipboard fallback, console APIs, and OCR
 - Node.js backend with Hono
@@ -11,7 +11,7 @@ The current system keeps the original core architecture intact:
 
 ## Current Product Status
 
-The project is near pilot deployment.
+The project is now in late pilot-preparation stage.
 
 Completed now:
 - native capture pipeline is in place
@@ -22,14 +22,16 @@ Completed now:
 - Windows secure token storage is implemented
 - authenticated WebSocket flow is implemented
 - request/session logging path to hosted DB is implemented
-- release packaging scripts are present
+- Azure App Service backend is deployed
+- hosted `/api/health` is live and returning `ok`
+- client staging/production config now points to the hosted Azure backend
+- production client publish works
+- tester bundle build works
+- sign-in UI has been polished for production use
 
-Still required before external rollout:
-- seed redeem codes in the hosted DB
-- replace staging and production placeholder URLs in the client configs
-- run one full live auth + explain + DB-log test
-- package the final tester build
-- run internal pilot validation before external rollout
+Current blocker:
+- hosted `POST /auth/redeem-code` is still returning `500 Access token secret is not configured`
+- this means Azure environment-variable auth configuration still needs one final fix before real sign-in can succeed
 
 ## High-Level Runtime Flow
 
@@ -103,6 +105,11 @@ Local client logs still exist under `runlogs/` for debugging and support.
   .env
   .env.example
 
+/dist
+  /backend
+  /client
+  /tester-bundle
+
 /docs and root markdown
   README.md
   deplyplan.md
@@ -168,31 +175,30 @@ dotnet build client\CodeExplainer.csproj -nologo
 dotnet run --project client\CodeExplainer.csproj
 ```
 
-## Deployment Configuration
+## Hosted Deployment State
 
-### Backend required environment values
+Current hosted backend shape:
+- Azure App Service hosts the backend
+- Supabase hosts auth/session/request log tables
+- WPF client stays local on each tester machine
 
-Minimum deployment-side values:
+Verified:
+- Azure backend deploy workflow is configured to deploy only `backend/`
+- hosted health endpoint responds successfully
+- production tester bundle launches and points to the hosted backend
 
-```env
-PORT=3000
-AI_PROVIDER=groq
-GROQ_API_KEY=your_real_key
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-ACCESS_TOKEN_SECRET=your_random_secret
-SKIP_AUTH=false
-```
+Not yet verified end to end:
+- redeem-code login against hosted backend
+- real explain request from packaged client to hosted backend
+- hosted DB row creation from the packaged client path
 
-### Client environment values
+## Immediate Next Step
 
-The client loads:
-- `appsettings.json`
-- `appsettings.Staging.json`
-- `appsettings.Production.json`
-
-For real staging/production, replace the placeholder backend URLs in those files.
+The next concrete action is:
+1. fix Azure `ACCESS_TOKEN_SECRET` handling so hosted `/auth/redeem-code` succeeds
+2. run one real packaged-client sign-in
+3. run one real packaged-client explanation request
+4. confirm `participants`, `refresh_tokens`, `sessions`, and `request_logs`
 
 ## Important Documents
 
@@ -201,12 +207,3 @@ For real staging/production, replace the placeholder backend URLs in those files
 - `release-checklist.md`: release and verification checklist
 - `pilot-user-guide.md`: tester-facing usage guide
 - `balancework.md`: detailed remaining work
-
-## Recommendation
-
-The next best step is not a redesign. It is final infrastructure hookup and staged validation:
-- seed redeem codes
-- set real client backend URLs
-- run one end-to-end login and explain test
-- confirm DB inserts
-- package the pilot build

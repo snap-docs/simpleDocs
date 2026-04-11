@@ -1,20 +1,24 @@
 # Release Checklist
 
-## 1. Backend Configuration
+## 1. Azure Backend Configuration
 
-- Confirm `backend/.env` contains real values for:
+- Confirm Azure App Service environment variables contain real values for:
   - `SUPABASE_URL`
   - `SUPABASE_ANON_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `ACCESS_TOKEN_SECRET`
   - provider API key
 - Confirm `SKIP_AUTH=false`
-- Rotate any temporary development API keys before release
+- Confirm `PUBLIC_APP_URL` matches the live Azure URL
+- Save/apply the settings
+- Restart the Azure Web App
+- Confirm `https://<your-app>/api/health` returns `ok`
+- Confirm `POST /auth/redeem-code` no longer returns `Access token secret is not configured`
 
 ## 2. Database Readiness
 
-- Run migration SQL in the hosted DB
-- Seed redeem codes into `redeem_codes`
+- Confirm migration SQL is applied in the hosted DB
+- Confirm redeem codes exist in `redeem_codes`
 - Run:
   `npm run check:db`
 - Confirm these tables are reachable:
@@ -26,10 +30,10 @@
 
 ## 3. Client Configuration
 
-- Replace placeholder URLs in:
+- Confirm hosted URLs are present in:
   - `client/appsettings.Staging.json`
   - `client/appsettings.Production.json`
-- Confirm staging/production `ApiBaseUrl` and `WsBaseUrl` are correct
+- Confirm `ApiBaseUrl` and `WsBaseUrl` point to the Azure backend
 - Confirm auth is enabled in staging/production config
 
 ## 4. Build Output
@@ -40,7 +44,10 @@
 2. Confirm output exists in `dist/client/`
 3. Confirm `Start-CodeExplainer.bat` exists
 4. Confirm production `appsettings` files are present
-5. Launch once on a clean Windows machine
+5. Run:
+   `.\prepare-tester-bundle.ps1 -EnvironmentName Production`
+6. Confirm output exists in `dist/tester-bundle/`
+7. Launch once on a clean Windows machine
 
 ### Backend
 1. Run:
@@ -51,7 +58,7 @@
 
 ## 5. Functional Verification
 
-- Redeem-code login works
+- Redeem-code login works against the hosted backend
 - Access token refresh works after restart
 - Logout works
 - Authenticated WebSocket connect works
@@ -62,7 +69,7 @@
 
 ## 6. Data Verification
 
-After one successful test request, confirm these DB effects:
+After one successful hosted test request, confirm these DB effects:
 - one `participant` row exists or is reused
 - one `refresh_tokens` row exists
 - one `sessions` row exists or updates
@@ -79,8 +86,9 @@ After one successful test request, confirm these DB effects:
 ## 8. Go / No-Go
 
 Release only if all are true:
+- hosted health works
+- hosted auth works
 - build works
-- auth works
 - DB logging works
 - support process is ready
 - no critical capture or overlay regressions remain

@@ -1,6 +1,6 @@
 # Implementation Status Plan
 
-This document replaces the older temporary planning notes and tracks the current implementation status of the deployment-ready system.
+This document tracks the current implementation status of the deployment-ready system.
 
 ## Completed Work
 
@@ -20,31 +20,40 @@ This document replaces the older temporary planning notes and tracks the current
 
 ### Request logging
 - session id and request id flow exist
-- request logging is designed to happen after stream completion
+- request logging happens after stream completion
 - hosted DB connectivity checks are available
 - DB schema and seed SQL files exist in the repo
+- request log field mapping has been extended for study fields
 
 ### Deployment tooling
 - client publish script exists
 - backend package script exists
 - tester bundle script exists
 - support bundle export script exists
+- Azure GitHub Actions workflow deploys only `backend/`
 - release and launch docs exist
+
+### Hosted validation
+- Azure backend is deployed
+- hosted health endpoint works
+- client production/staging config points to the hosted backend
+- production bundle launches correctly
+- sign-in UI has been polished
 
 ## Remaining Work
 
 ### High priority
-1. seed redeem codes in the hosted DB
-2. replace staging/production client placeholder URLs
-3. run one full redeem-code login test against hosted backend
-4. run one full explain request against hosted backend
-5. verify DB rows are created correctly
+1. fix Azure `ACCESS_TOKEN_SECRET` handling
+2. run one full redeem-code login test against hosted backend
+3. run one full explain request against hosted backend
+4. verify DB rows are created correctly
+5. validate tester bundle on a clean Windows machine
 
 ### Medium priority
 1. validate on multiple Windows environments
 2. verify logout and expired-session recovery with real backend
-3. package the final pilot bundle
-4. prepare internal pilot support workflow
+3. prepare internal pilot support workflow
+4. rotate development secrets before external users
 
 ### Lower priority after pilot starts
 1. refine onboarding copy based on tester confusion
@@ -53,6 +62,6 @@ This document replaces the older temporary planning notes and tracks the current
 
 ## Current Truth
 
-The remaining work is mostly infrastructure hookup, staging validation, and pilot hardening.
+The remaining work is now mostly hosted validation and pilot hardening.
 
 The main product architecture should not be redesigned at this stage.
