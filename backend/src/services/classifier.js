@@ -96,6 +96,44 @@ function isFragmentarySelection(text) {
   return words <= 12;
 }
 
+function looksLikePlainLanguageSelection(text) {
+  if (!text || typeof text !== 'string') {
+    return false;
+  }
+
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  if (trimmed.length > 80) {
+    return false;
+  }
+
+  if (/[\r\n]/.test(trimmed)) {
+    return false;
+  }
+
+  if (/[{}[\]();<>`]/.test(trimmed) || trimmed.includes('=>') || trimmed.includes('::')) {
+    return false;
+  }
+
+  if (/^\s*[.#@]/.test(trimmed)) {
+    return false;
+  }
+
+  if (/[=:]/.test(trimmed)) {
+    return false;
+  }
+
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length > 6) {
+    return false;
+  }
+
+  return words.every(word => /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(word));
+}
+
 function hasUnbalancedDelimiters(text) {
   const counts = { '(': 0, ')': 0, '[': 0, ']': 0, '{': 0, '}': 0 };
   for (let i = 0; i < text.length; i++) {
@@ -179,6 +217,7 @@ export function classify(selectedText, backgroundContext = '') {
 
   const trimmed = selectedText.trim();
   if (trimmed.length === 0) return 4;
+  const plainLanguageSelection = looksLikePlainLanguageSelection(trimmed);
 
   // Priority 1: Error detection — always wins
   const selectedErrorScore = score(trimmed, ERROR_PATTERNS);
@@ -207,7 +246,7 @@ export function classify(selectedText, backgroundContext = '') {
       if (contextTerminalScore >= 1) return 3;
 
       const contextCodeScore = score(contextBlob, CODE_PATTERNS);
-      if (contextCodeScore >= 2) return 1;
+      if (!plainLanguageSelection && contextCodeScore >= 2) return 1;
     }
   }
 

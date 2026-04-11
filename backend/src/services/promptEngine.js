@@ -83,6 +83,9 @@ WIDGET OUTPUT RULES (STRICT):
 - Keep focus on selected text only.
 - Background context is support only, never the main subject.
 - If context is missing, say that briefly in one short sentence.
+- If the selected text is a normal word or short phrase from prose or docs, explain its meaning directly.
+- Do not invent an error, warning, or code problem unless the selected text itself clearly shows one.
+- Do not treat a plain term as broken code just because the surrounding page mentions code, Git, deployment, or tooling.
 - Output plain sentence flow only.`;
 
 /**
