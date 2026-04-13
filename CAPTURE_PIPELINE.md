@@ -54,11 +54,15 @@ The surrounding work added around auth, logging, and deployment does not redesig
 
 ### IDE editor
 
-- UIA document range
 - UIA visible ranges
+- UIA document range
+- UIA selection-anchored text range expansion
 - nearest UIA container
+- MSAA container
 - OCR
 - metadata fallback
+
+For IDE editors, the pipeline now collects multiple structured candidates first and scores them before accepting a background result. This keeps OCR as the real last resort instead of the common VS Code fallback path.
 
 ### Terminal
 

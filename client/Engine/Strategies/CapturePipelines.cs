@@ -1,6 +1,7 @@
+using System.Collections.Generic;
+using System.Text;
 using System.Threading.Tasks;
 using CodeExplainer.Engine.Models;
-using System.Text;
 
 namespace CodeExplainer.Engine.Strategies
 {
@@ -20,6 +21,15 @@ namespace CodeExplainer.Engine.Strategies
             public CaptureMethod Method { get; init; } = CaptureMethod.WindowMetadata;
             public bool IsMetadataFallback { get; init; }
             public string Status { get; init; } = string.Empty;
+        }
+
+        private sealed class BackgroundCandidate
+        {
+            public string Text { get; init; } = string.Empty;
+            public CaptureMethod Method { get; init; } = CaptureMethod.WindowMetadata;
+            public string Status { get; init; } = string.Empty;
+            public float Score { get; init; }
+            public string SourceLabel { get; init; } = string.Empty;
         }
 
         public static async Task<SelectedCaptureOutcome> CaptureSelectedTextAsync(
@@ -321,107 +331,99 @@ namespace CodeExplainer.Engine.Strategies
             string? selectedTextHint = null)
         {
             bool isVsCodeLike = IsVsCodeLike(window.ProcessName);
+            var candidates = new List<BackgroundCandidate>();
 
-            if (isVsCodeLike && TryAcceptEditorBackgroundCandidate(
-                window,
-                UiAutomationCapture.TryGetVisibleRangesText,
-                maxChars,
-                selectedTextHint,
-                CaptureMethod.UiaTextPatternVisibleRanges,
-                "Background context captured via UIA visible ranges."))
+            if (isVsCodeLike)
             {
-                return _acceptedBackground!;
+                TryAddEditorBackgroundCandidate(
+                    candidates,
+                    window,
+                    UiAutomationCapture.TryGetVisibleRangesText,
+                    maxChars,
+                    selectedTextHint,
+                    CaptureMethod.UiaTextPatternVisibleRanges,
+                    "Background context captured via UIA visible ranges.");
+
+                TryAddEditorBackgroundCandidate(
+                    candidates,
+                    window,
+                    UiAutomationCapture.TryGetVisibleRangesTextFromDescendants,
+                    maxChars,
+                    selectedTextHint,
+                    CaptureMethod.UiaTextPatternVisibleRanges,
+                    "Background context captured via descendant UIA visible ranges.");
             }
 
-            if (isVsCodeLike && TryAcceptEditorBackgroundCandidate(
-                window,
-                UiAutomationCapture.TryGetVisibleRangesTextFromDescendants,
-                maxChars,
-                selectedTextHint,
-                CaptureMethod.UiaTextPatternVisibleRanges,
-                "Background context captured via descendant UIA visible ranges."))
-            {
-                return _acceptedBackground!;
-            }
-
-            if (TryAcceptEditorBackgroundCandidate(
+            TryAddEditorBackgroundCandidate(
+                candidates,
                 window,
                 UiAutomationCapture.TryGetDocumentRangeText,
                 maxChars,
                 selectedTextHint,
                 CaptureMethod.UiaTextPatternDocumentRange,
-                "Background context captured via UIA document range."))
+                "Background context captured via UIA document range.");
+
+            if (isVsCodeLike)
             {
-                return _acceptedBackground!;
+                TryAddEditorBackgroundCandidate(
+                    candidates,
+                    window,
+                    UiAutomationCapture.TryGetDocumentRangeTextFromDescendants,
+                    maxChars,
+                    selectedTextHint,
+                    CaptureMethod.UiaTextPatternDocumentRange,
+                    "Background context captured via descendant UIA document range.");
             }
 
-            if (isVsCodeLike && TryAcceptEditorBackgroundCandidate(
+            TryAddEditorBackgroundCandidate(
+                candidates,
                 window,
-                UiAutomationCapture.TryGetDocumentRangeTextFromDescendants,
+                (int limit, out string text) => UiAutomationCapture.TryGetNeighborLinesViaTextRange(limit, 12, 12, out text),
                 maxChars,
                 selectedTextHint,
-                CaptureMethod.UiaTextPatternDocumentRange,
-                "Background context captured via descendant UIA document range."))
+                CaptureMethod.IdeContextTextRange,
+                "Background context captured via UIA selection-anchored neighbor lines.");
+
+            if (!isVsCodeLike)
             {
-                return _acceptedBackground!;
+                TryAddEditorBackgroundCandidate(
+                    candidates,
+                    window,
+                    UiAutomationCapture.TryGetVisibleRangesText,
+                    maxChars,
+                    selectedTextHint,
+                    CaptureMethod.UiaTextPatternVisibleRanges,
+                    "Background context captured via UIA visible ranges.");
             }
 
-            if (!isVsCodeLike && TryAcceptEditorBackgroundCandidate(
-                window,
-                UiAutomationCapture.TryGetVisibleRangesText,
-                maxChars,
-                selectedTextHint,
-                CaptureMethod.UiaTextPatternVisibleRanges,
-                "Background context captured via UIA visible ranges."))
-            {
-                return _acceptedBackground!;
-            }
-
-            if (!isVsCodeLike && TryAcceptEditorBackgroundCandidate(
-                window,
-                UiAutomationCapture.TryGetNearestContainerText,
-                maxChars,
-                selectedTextHint,
-                CaptureMethod.UiaTreeContainer,
-                "Background context captured via UIA editor-local container."))
-            {
-                return _acceptedBackground!;
-            }
-
-            if (isVsCodeLike && TryAcceptEditorBackgroundCandidate(
+            TryAddEditorBackgroundCandidate(
+                candidates,
                 window,
                 UiAutomationCapture.TryGetNearestContainerText,
                 maxChars,
                 selectedTextHint,
                 CaptureMethod.UiaTreeContainer,
-                "Background context captured via UIA editor-local container."))
-            {
-                return _acceptedBackground!;
-            }
+                "Background context captured via UIA editor-local container.");
 
-            if (MsaaCapture.TryGetContainerText(window.Hwnd, maxChars, out string msaaText))
-            {
-                if (IsRejectedIdeBackgroundSource(window, msaaText))
-                {
-                    RuntimeLog.Warn("CapturePipeline", $"Rejected raw MSAA background context for {window.ProcessName}.");
-                }
-                else
-                {
-                    string cleaned = CleanKnownUiNoise(window, msaaText, maxChars);
-                    if ((!LooksLikeEditorBackgroundNoise(cleaned) && LooksLikePlausibleEditorBackground(cleaned))
-                        || LooksLikeSelectionAnchoredBackground(cleaned, selectedTextHint))
-                    {
-                        RuntimeLog.Info("CapturePipeline", $"MSAA background context used for {window.ProcessName}.");
-                        return new BackgroundCaptureOutcome
-                        {
-                            Text = cleaned,
-                            Method = CaptureMethod.MsaaContainer,
-                            Status = "Background context captured via MSAA container route."
-                        };
-                    }
-                }
+            TryAddEditorBackgroundCandidate(
+                candidates,
+                window,
+                (int limit, out string text) => MsaaCapture.TryGetContainerText(window.Hwnd, limit, out text),
+                maxChars,
+                selectedTextHint,
+                CaptureMethod.MsaaContainer,
+                "Background context captured via MSAA container route.");
 
-                RuntimeLog.Warn("CapturePipeline", $"Rejected noisy MSAA background context for {window.ProcessName}.");
+            BackgroundCandidate? bestCandidate = GetBestBackgroundCandidate(candidates);
+            if (bestCandidate != null)
+            {
+                RuntimeLog.Info("CapturePipeline", $"{bestCandidate.SourceLabel} background context selected for {window.ProcessName} (score {bestCandidate.Score:F2}).");
+                return new BackgroundCaptureOutcome
+                {
+                    Text = bestCandidate.Text,
+                    Method = bestCandidate.Method,
+                    Status = bestCandidate.Status
+                };
             }
 
             return MetadataFallback(window, "Background context unavailable from editor surface; using window metadata.");
@@ -679,11 +681,10 @@ namespace CodeExplainer.Engine.Strategies
             return lineCount >= 2 && normalized.Length >= 30;
         }
 
-        private static BackgroundCaptureOutcome? _acceptedBackground;
-
         private delegate bool BackgroundTextSource(int maxChars, out string text);
 
-        private static bool TryAcceptEditorBackgroundCandidate(
+        private static void TryAddEditorBackgroundCandidate(
+            List<BackgroundCandidate> candidates,
             ActiveWindowInfo window,
             BackgroundTextSource source,
             int maxChars,
@@ -691,10 +692,9 @@ namespace CodeExplainer.Engine.Strategies
             CaptureMethod method,
             string status)
         {
-            _acceptedBackground = null;
             if (!source(maxChars, out string rawText))
             {
-                return false;
+                return;
             }
 
             string sourceLabel = method switch
@@ -702,32 +702,124 @@ namespace CodeExplainer.Engine.Strategies
                 CaptureMethod.UiaTextPatternDocumentRange => "document-range",
                 CaptureMethod.UiaTextPatternVisibleRanges => "visible-ranges",
                 CaptureMethod.UiaTreeContainer => "container",
+                CaptureMethod.IdeContextTextRange => "anchored-text-range",
+                CaptureMethod.MsaaContainer => "msaa-container",
                 _ => method.ToApiValue()
             };
 
             if (IsRejectedIdeBackgroundSource(window, rawText))
             {
-                RuntimeLog.Warn("CapturePipeline", $"Rejected raw UIA {sourceLabel} background for {window.ProcessName}.");
-                return false;
+                RuntimeLog.Warn("CapturePipeline", $"Rejected raw {sourceLabel} background for {window.ProcessName}: source looked like IDE chrome or UI noise.");
+                return;
             }
 
             string cleaned = CleanKnownUiNoise(window, rawText, maxChars);
-            if ((!LooksLikeEditorBackgroundNoise(cleaned)
-                    && LooksLikePlausibleEditorBackground(cleaned)
-                    && AddsUsefulBackgroundContext(cleaned, selectedTextHint))
-                || LooksLikeSelectionAnchoredBackground(cleaned, selectedTextHint))
+            if (string.IsNullOrWhiteSpace(cleaned))
             {
-                _acceptedBackground = new BackgroundCaptureOutcome
-                {
-                    Text = cleaned,
-                    Method = method,
-                    Status = status
-                };
-                return true;
+                RuntimeLog.Warn("CapturePipeline", $"Rejected cleaned {sourceLabel} background for {window.ProcessName}: nothing usable remained after cleaning.");
+                return;
             }
 
-            RuntimeLog.Warn("CapturePipeline", $"Rejected noisy UIA {sourceLabel} background for {window.ProcessName}.");
-            return false;
+            if (LooksLikeEditorBackgroundNoise(cleaned))
+            {
+                RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: still looked like editor chrome or noise after cleaning.");
+                return;
+            }
+
+            bool anchored = LooksLikeSelectionAnchoredBackground(cleaned, selectedTextHint);
+            if (!anchored && !LooksLikePlausibleEditorBackground(cleaned))
+            {
+                RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: candidate did not look like plausible editor content.");
+                return;
+            }
+
+            if (!anchored && !AddsUsefulBackgroundContext(cleaned, selectedTextHint))
+            {
+                RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: candidate did not add useful context beyond the selection.");
+                return;
+            }
+
+            float score = ScoreBackgroundCandidate(cleaned, selectedTextHint);
+            if (score < 0.40f)
+            {
+                RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: score {score:F2} below threshold.");
+                return;
+            }
+
+            candidates.Add(new BackgroundCandidate
+            {
+                Text = cleaned,
+                Method = method,
+                Status = status,
+                Score = score,
+                SourceLabel = sourceLabel
+            });
+        }
+
+        private static BackgroundCandidate? GetBestBackgroundCandidate(List<BackgroundCandidate> candidates)
+        {
+            BackgroundCandidate? best = null;
+            foreach (BackgroundCandidate candidate in candidates)
+            {
+                if (best == null || candidate.Score > best.Score)
+                {
+                    best = candidate;
+                }
+            }
+
+            return best;
+        }
+
+        private static float ScoreBackgroundCandidate(string text, string? selectedTextHint)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return 0f;
+            }
+
+            string normalized = text.Trim();
+            int lineCount = normalized.Split('\n').Length;
+            float score = 0f;
+
+            if (lineCount >= 5)
+            {
+                score += 0.25f;
+            }
+            else if (lineCount >= 2)
+            {
+                score += 0.15f;
+            }
+
+            if (HasCodeSignal(normalized))
+            {
+                score += 0.30f;
+            }
+
+            if (HasIndentationSignal(normalized))
+            {
+                score += 0.15f;
+            }
+
+            if (!LooksLikeIdeChromeLabelsOnly(normalized))
+            {
+                score += 0.20f;
+            }
+
+            if (normalized.Length >= 200)
+            {
+                score += 0.10f;
+            }
+            else if (normalized.Length >= 80)
+            {
+                score += 0.05f;
+            }
+
+            if (LooksLikeSelectionAnchoredBackground(normalized, selectedTextHint))
+            {
+                score += 0.10f;
+            }
+
+            return System.Math.Min(score, 1f);
         }
 
         private static bool LooksLikeSelectionAnchoredBackground(string text, string? selectedTextHint)
@@ -954,6 +1046,43 @@ namespace CodeExplainer.Engine.Strategies
                 || lower.Contains("if ")
                 || lower.Contains("await ")
                 || lower.Contains("@param");
+        }
+
+        private static bool HasIndentationSignal(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            string[] lines = text.Replace("\r\n", "\n").Split('\n');
+            int indentedLines = 0;
+
+            foreach (string rawLine in lines)
+            {
+                if (string.IsNullOrWhiteSpace(rawLine))
+                {
+                    continue;
+                }
+
+                int leadingWhitespace = 0;
+                while (leadingWhitespace < rawLine.Length
+                    && (rawLine[leadingWhitespace] == ' ' || rawLine[leadingWhitespace] == '\t'))
+                {
+                    leadingWhitespace++;
+                }
+
+                if (leadingWhitespace >= 2)
+                {
+                    indentedLines++;
+                    if (indentedLines >= 2)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static bool IsVsCodeLike(string processName)

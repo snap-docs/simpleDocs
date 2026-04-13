@@ -194,6 +194,31 @@ namespace CodeExplainer.Engine.Strategies
             return false;
         }
 
+        public static bool TryGetNeighborLinesViaTextRange(int maxChars, int linesUp, int linesDown, out string text)
+        {
+            text = string.Empty;
+
+            foreach (AutomationElement element in EnumerateFocusedAndAncestors(DefaultAncestorDepth))
+            {
+                if (TryGetNeighborLinesViaTextRangeFromElement(element, maxChars, linesUp, linesDown, out string candidate))
+                {
+                    text = candidate;
+                    return true;
+                }
+            }
+
+            foreach (AutomationElement element in EnumerateFocusedAndAncestors(6))
+            {
+                if (TryGetNeighborLinesViaTextRangeFromDescendants(element, maxChars, linesUp, linesDown, out string candidate))
+                {
+                    text = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static IEnumerable<AutomationElement> EnumerateFocusedAndAncestors(int maxDepth)
         {
             AutomationElement? current = GetFocusedElement();
@@ -251,6 +276,117 @@ namespace CodeExplainer.Engine.Strategies
             catch
             {
                 // Ignore and keep probing ancestors.
+            }
+
+            return false;
+        }
+
+        private static bool TryGetNeighborLinesViaTextRangeFromElement(
+            AutomationElement element,
+            int maxChars,
+            int linesUp,
+            int linesDown,
+            out string text)
+        {
+            text = string.Empty;
+
+            try
+            {
+                if (element.TryGetCurrentPattern(TextPattern.Pattern, out object? patternObject) &&
+                    patternObject is TextPattern textPattern)
+                {
+                    var selection = textPattern.GetSelection();
+                    if (selection.Length == 0)
+                    {
+                        return false;
+                    }
+
+                    foreach (var selectedRange in selection)
+                    {
+                        var expanded = selectedRange.Clone();
+
+                        try
+                        {
+                            expanded.MoveEndpointByUnit(System.Windows.Automation.Text.TextPatternRangeEndpoint.Start, System.Windows.Automation.Text.TextUnit.Line, -linesUp);
+                        }
+                        catch
+                        {
+                            // Keep the available start if UIA cannot move further.
+                        }
+
+                        try
+                        {
+                            expanded.MoveEndpointByUnit(System.Windows.Automation.Text.TextPatternRangeEndpoint.End, System.Windows.Automation.Text.TextUnit.Line, linesDown);
+                        }
+                        catch
+                        {
+                            // Keep the available end if UIA cannot move further.
+                        }
+
+                        string? value = Normalize(expanded.GetText(maxChars), maxChars);
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            text = value;
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore and keep probing.
+            }
+
+            return false;
+        }
+
+        private static bool TryGetNeighborLinesViaTextRangeFromDescendants(
+            AutomationElement root,
+            int maxChars,
+            int linesUp,
+            int linesDown,
+            out string text)
+        {
+            text = string.Empty;
+            var walker = TreeWalker.RawViewWalker;
+            var queue = new Queue<(AutomationElement element, int depth)>();
+            queue.Enqueue((root, 0));
+
+            int inspected = 0;
+            const int maxNodes = 500;
+            const int maxDepth = 5;
+
+            while (queue.Count > 0 && inspected < maxNodes)
+            {
+                (AutomationElement element, int depth) = queue.Dequeue();
+                inspected++;
+
+                if (depth > 0
+                    && !LooksLikeNonEditorPanel(element)
+                    && TryGetNeighborLinesViaTextRangeFromElement(element, maxChars, linesUp, linesDown, out string candidate))
+                {
+                    text = candidate;
+                    return true;
+                }
+
+                if (depth >= maxDepth)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    AutomationElement? child = walker.GetFirstChild(element);
+                    while (child != null && inspected < maxNodes)
+                    {
+                        queue.Enqueue((child, depth + 1));
+                        child = walker.GetNextSibling(child);
+                    }
+                }
+                catch
+                {
+                    // Ignore traversal failures for individual nodes.
+                }
             }
 
             return false;
