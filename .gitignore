@@ -9,3 +9,4 @@ client/obj_codex/
 *.log
 *.zip
 backend/.env
+*.lscache
