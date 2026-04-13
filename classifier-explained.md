@@ -36,10 +36,9 @@ The result is stored in `client/Engine/Models/CaptureResult.cs`.
 ### Meaning
 
 - `is_partial = false`
-  the capture was considered complete enough
-
+  means the capture was considered complete enough
 - `is_partial = true`
-  the capture was incomplete, weak, fallback-based, or metadata-only
+  means the capture was incomplete, weak, fallback-based, or metadata-only
 
 ### Typical reasons `is_partial` becomes true
 
@@ -50,7 +49,10 @@ The result is stored in `client/Engine/Models/CaptureResult.cs`.
 
 So `is_partial` is basically a capture-quality flag.
 
-It tells us whether the request had full context or reduced context.
+Important current note:
+
+- `is_partial` is still used in runtime behavior and overlay metadata
+- it is no longer stored in the hosted `request_logs` table
 
 ## How `task_type` works
 
@@ -58,7 +60,7 @@ It tells us whether the request had full context or reduced context.
 
 The backend does not ask an LLM to classify the request first.
 
-Instead, it uses normal code rules in:
+Instead, it uses rule-based logic in:
 
 - `backend/src/services/classifier.js`
 
@@ -155,11 +157,13 @@ The current design is:
 1. client captures the text and context
 2. client marks whether the capture is partial
 3. backend classifies the content with rules
-4. backend stores the final logging fields
+4. backend stores the final request-log fields
 5. the LLM is used for the actual explanation only
 
 ## Short summary
 
 - `is_partial` = client-side capture quality flag
 - `task_type` = backend rule-based category
-- neither one currently uses a separate LLM classification step
+- `task_type` is stored in `request_logs`
+- `is_partial` is runtime metadata but not stored in `request_logs`
+- neither one uses a separate LLM classification step

@@ -8,11 +8,13 @@ I have a Windows desktop app called simpleDocs that is distributed as a zip file
 The tester flow is:
 - user downloads the zip
 - user extracts the zip to a normal folder
-- inside the extracted folder there is app\\CodeExplainer.exe
+- inside the extracted folder there is app\CodeExplainer.exe
 - user launches CodeExplainer.exe directly
 - on first launch the app asks for a one-time redeem code
 - after successful sign-in, the app stays signed in on that Windows user profile
 - on later launches the user usually does not need to enter the code again
+- by default the app also starts automatically when the user signs in to Windows
+- the user can turn that startup behavior off from the tray menu
 - user selects code, terminal output, or technical text
 - user presses the app hotkey
 - the app shows a floating explanation overlay

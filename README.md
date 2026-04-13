@@ -1,80 +1,95 @@
-# Intelligent Context Engine & Code Explainer
+# simpleDocs
 
-This repository contains a Windows-first OS-level assistant that explains highlighted code, browser text, and terminal output inside a floating overlay without forcing the user to switch windows.
+This repository contains `simpleDocs`, a Windows-first OS-level assistant that explains highlighted code, browser text, and terminal output inside a floating overlay without forcing the user to switch windows.
 
-The core architecture remains intentionally unchanged:
+## Current Architecture
+
+The main architecture is intentionally preserved.
+
 - C# / .NET 8 / WPF desktop client
 - Native Windows capture pipeline using UIA, MSAA, clipboard fallback, console APIs, and OCR
 - Node.js backend with Hono
 - WebSocket streaming for live responses
 - Hosted Supabase/Postgres for auth and study logging
+- Azure App Service for the hosted backend
+- Groq as the current primary model provider, with OpenRouter available as a backend-side fallback path
 
 ## Current Product Status
 
-The project is now in late pilot-verification stage.
+The project is now in pilot-ready implementation state with a few remaining rollout checks.
 
-Completed now:
+Implemented now:
+
 - native capture pipeline is in place
-- overlay streaming flow is in place
+- overlay streaming response flow is in place
 - short overlay-focused explanation style is in place
-- thumbs up / thumbs down feedback is in place
 - one-time redeem-code auth is implemented
-- Windows secure token storage is implemented
-- authenticated WebSocket flow is implemented
-- request/session logging path to hosted DB is implemented
-- Azure App Service backend is deployed
-- hosted `/api/health` is live and returning `ok`
-- hosted redeem-code login is working
-- hosted refresh and logout flow are working
-- hosted authenticated WebSocket explain flow is working
-- hosted DB row creation is working for `participants`, `refresh_tokens`, `sessions`, and `request_logs`
-- client staging/production config now points to the hosted Azure backend
+- Windows secure token storage with DPAPI is implemented
+- authenticated WebSocket explain flow is implemented
+- hosted request logging is implemented
+- thumbs up / thumbs down feedback is implemented
+- thumbs feedback is stored in `request_logs.feedback_reaction`
 - production client publish works
-- tester bundle build works
-- sign-in UI has been polished for production use
+- tester zip package works
+- client can start automatically with Windows using a Registry `Run` entry
+- Windows auto-start is ON by default and can be toggled from the tray menu
+- Azure App Service backend is live
+- hosted `/api/health` is live and returning `ok`
+- hosted redeem-code login, refresh, and logout flows are working
+- hosted DB connectivity checks are working
+- Groq fallback-key support is implemented in the backend
 
-Current remaining validation:
-- one full manual redeem-code login still needs to be completed from the packaged WPF sign-in window
-- one full manual hotkey-triggered explanation still needs to be completed from the packaged WPF client
-- the tester bundle still needs one clean-machine validation outside the development machine
+Current remaining rollout work:
 
-## High-Level Runtime Flow
+- run one final clean-machine launch of the packaged client outside the dev machine
+- validate the tester package on at least one additional Windows environment
+- complete internal pilot monitoring and support workflow
+- rotate any temporary development secrets before broader external rollout
+
+## Runtime Flow
 
 1. User launches the Windows client.
 2. The client restores the stored session or prompts for a redeem code.
 3. The client stores tokens securely on Windows using DPAPI.
-4. The user highlights text and presses the hotkey.
-5. The capture engine extracts selected text and surrounding context.
-6. The client sends the payload to the backend over an authenticated WebSocket.
-7. The backend classifies the request and streams the explanation back in real time.
-8. The overlay renders the response immediately as tokens arrive.
-9. After stream completion, the backend writes one final request log row to the hosted DB.
-10. The user can submit a single thumbs up or thumbs down reaction for the visible response.
+4. The app runs hidden to tray and registers the global hotkey.
+5. The user highlights text and presses the hotkey.
+6. The capture engine extracts selected text and surrounding context.
+7. The client sends the payload to the backend over an authenticated WebSocket.
+8. The backend classifies the request and streams the explanation back in real time.
+9. The overlay renders the response immediately as tokens arrive.
+10. After stream completion, the backend writes one final `request_logs` row to the hosted DB.
+11. The user can submit a single thumbs up or thumbs down reaction for the visible response.
 
-## Architecture
+## Current Data Model
 
-### Client
-- WPF app for tray, auth flow, hotkey, and overlay
-- Capture engine for selected text and background context
-- Secure token storage with DPAPI
-- WebSocket client with retry and reconnect behavior
-
-### Backend
-- Hono HTTP + WebSocket server
-- `/auth/redeem-code`, `/auth/refresh`, `/auth/logout`
-- `/ws/stream` with access-token validation on connection
-- Prompt, classification, and model routing services
-- Async request logging after stream completion
-
-### Data Layer
 Hosted Supabase/Postgres is used for:
+
 - `participants`
 - `redeem_codes`
 - `refresh_tokens`
-- `sessions`
 - `request_logs`
 
-Local client logs still exist under `runlogs/` for debugging and support.
+`request_logs` is the main study-analysis table and currently stores:
+
+- `participant_id`
+- `request_id`
+- `timestamp`
+- `environment_type`
+- `process_name`
+- `usage_context`
+- `window_title`
+- `selected_text`
+- `background_context`
+- `selected_method`
+- `background_method`
+- `task_type`
+- `response_text`
+- `time_to_first_token_ms`
+- `total_response_time_ms`
+- `status`
+- `feedback_reaction`
+
+The system no longer stores `session_id`, `is_partial`, `is_unsupported`, or `feedback_at` in the hosted request log table.
 
 ## Repository Structure
 
@@ -93,11 +108,11 @@ Local client logs still exist under `runlogs/` for debugging and support.
   SecureTokenStore.cs
   LoginWindow.xaml
   OverlayWindow.xaml
+  WindowsStartupManager.cs
 
 /backend
   /db
     /migrations
-    seed_redeem_codes.sql
   /scripts
     check-db-config.js
   /src
@@ -111,56 +126,22 @@ Local client logs still exist under `runlogs/` for debugging and support.
   .env.example
 
 /dist
-  /backend
-  /client
-  /tester-bundle
-
-/docs and root markdown
-  README.md
-  deplyplan.md
-  launch-docs.md
-  release-checklist.md
-  pilot-user-guide.md
-  balancework.md
+  simpleDocs-direct-exe-1.1.0-pilot.zip
 ```
 
-## Current DB Logging Shape
+## Packaging
 
-The hosted DB request log is intended to store the full final request record used for case-study analysis.
+The current tester package is a portable zip, not a traditional installer.
 
-Current target fields include:
-- `participant_id`
-- `session_id`
-- `request_id`
-- `timestamp`
-- `environment_type`
-- `process_name`
-- `usage_context`
-- `window_title`
-- `selected_text`
-- `background_context`
-- `selected_method`
-- `background_method`
-- `is_partial`
-- `is_unsupported`
-- `task_type`
-- `response_text`
-- `time_to_first_token_ms`
-- `total_response_time_ms`
-- `status`
+Current packaged contents:
 
-## Performance Notes
+- `app\CodeExplainer.exe`
+- `app\appsettings.json`
+- `docs\final-tester-package-guide.md`
+- `docs\chatgpt-tester-plan-prompt.md`
+- `README-FIRST.txt`
 
-The main user-visible path is intentionally preserved.
-
-Important runtime decisions:
-- DB writes happen after stream completion
-- there are no per-token DB writes
-- auth refresh is lightweight and separate from capture work
-- capture logic was not redesigned
-- forced browser OCR debug behavior was removed
-
-This means the current deployment/auth work should not materially change the core capture speed or first-token experience.
+The main tester entry point is `app\CodeExplainer.exe`.
 
 ## Local Development
 
@@ -170,6 +151,7 @@ This means the current deployment/auth work should not materially change the cor
 cd backend
 npm install
 npm run check
+npm run check:db
 npm run dev
 ```
 
@@ -183,34 +165,42 @@ dotnet run --project client\CodeExplainer.csproj
 ## Hosted Deployment State
 
 Current hosted backend shape:
+
 - Azure App Service hosts the backend
-- Supabase hosts auth/session/request log tables
+- Supabase hosts auth and request-log tables
 - WPF client stays local on each tester machine
+- production client config points to the hosted Azure backend
+- Windows client remains responsible for capture, hotkey, overlay, and local auth state
 
-Verified:
-- Azure backend deploy workflow is configured to deploy only `backend/`
+Verified now:
+
 - hosted health endpoint responds successfully
-- hosted redeem / refresh / logout behavior has been verified directly against Azure
-- hosted WebSocket explanation and DB logging have been verified directly against Azure
-- production tester bundle launches and points to the hosted backend
+- hosted auth flow works
+- hosted request logging works
+- feedback updates `request_logs.feedback_reaction`
+- tester zip builds correctly from the current repo
+- direct `CodeExplainer.exe` launch is the supported packaged path
 
-Not yet verified end to end:
-- manual redeem-code login from the live packaged WPF sign-in window
-- manual explain request from the live packaged WPF client using real text selection and hotkey
-- packaged-client flow on a separate clean Windows machine
+Remaining operational validation:
 
-## Immediate Next Step
+- one clean-machine packaged launch outside the development machine
+- broader multi-app pilot validation across real tester machines
 
-The next concrete action is:
-1. complete one manual packaged-client sign-in with a fresh redeem code
-2. run one manual packaged-client explanation request using the real hotkey
-3. confirm the new `participants`, `refresh_tokens`, `sessions`, and `request_logs` rows from that packaged-client path
-4. validate the tester bundle on a clean Windows machine
+## Immediate Next Steps
+
+1. validate the latest zip on one clean Windows machine
+2. issue redeem codes to internal pilot users
+3. monitor `request_logs` and `feedback_reaction` during pilot use
+4. collect capture-quality feedback from editors, browsers, and terminals
+5. rotate temporary development secrets before a wider external rollout
 
 ## Important Documents
 
-- `deplyplan.md`: current deployment plan and rollout path
-- `launch-docs.md`: launch and environment setup guide
+- `deplyplan.md`: current deployment topology and rollout plan
+- `launch-docs.md`: local, hosted, and package launch guide
 - `release-checklist.md`: release and verification checklist
-- `pilot-user-guide.md`: tester-facing usage guide
-- `balancework.md`: detailed remaining work
+- `final-tester-package-guide.md`: tester-facing package guide
+- `pilot-user-guide.md`: short tester usage guide
+- `balancework.md`: remaining rollout work after current implementation
+- `CAPTURE_PIPELINE.md`: current capture architecture reference
+- `classifier-explained.md`: how `is_partial` and `task_type` are produced

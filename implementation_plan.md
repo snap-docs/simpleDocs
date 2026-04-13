@@ -2,9 +2,10 @@
 
 This document tracks the current implementation status of the deployment-ready system.
 
-## Completed Work
+## Current Implemented State
 
 ### Core assistant flow
+
 - native Windows capture pipeline remains intact
 - overlay rendering remains intact
 - WebSocket streaming remains intact
@@ -12,6 +13,7 @@ This document tracks the current implementation status of the deployment-ready s
 - thumbs up / thumbs down feedback exists in the overlay
 
 ### Auth and session
+
 - redeem-code login UI exists in the WPF client
 - backend redeem / refresh / logout endpoints exist
 - client stores tokens securely on Windows
@@ -19,52 +21,60 @@ This document tracks the current implementation status of the deployment-ready s
 - WebSocket auth is validated on connect
 
 ### Request logging
-- session id and request id flow exist
+
 - request logging happens after stream completion
+- request logging writes a single final row per request
 - hosted DB connectivity checks are available
 - DB schema and seed SQL files exist in the repo
-- request log field mapping has been extended for study fields
+- feedback is stored as `feedback_reaction` in `request_logs`
+- `session_id`, `is_partial`, and `is_unsupported` are no longer part of the active hosted request-log design
 
-### Deployment tooling
+### Packaging and startup
+
 - client publish script exists
-- backend package script exists
 - tester bundle script exists
-- support bundle export script exists
-- Azure GitHub Actions workflow deploys only `backend/`
-- release and launch docs exist
+- final direct-exe package exists
+- packaged app launches directly from `CodeExplainer.exe`
+- Windows auto-start support exists through a Registry `Run` entry
+- startup can be toggled from the tray menu
 
 ### Hosted validation
+
 - Azure backend is deployed
 - hosted health endpoint works
 - hosted redeem-code login works
 - hosted refresh/logout flow works
 - hosted authenticated WebSocket explanation works
 - hosted DB logging works
+- hosted feedback logging works
 - client production/staging config points to the hosted backend
-- production bundle launches correctly
-- sign-in UI has been polished
 
 ## Remaining Work
 
 ### High priority
-1. run one full redeem-code login test from the packaged WPF client
-2. run one full explain request from the packaged WPF client
-3. verify DB rows are created correctly from that packaged-client flow
-4. validate tester bundle on a clean Windows machine
+
+1. run the latest package on a clean Windows machine
+2. run a short internal pilot with real users
+3. confirm the support and issue-triage process
+4. rotate temporary development secrets before broader rollout
 
 ### Medium priority
+
 1. validate on multiple Windows environments
-2. verify expired-session recovery from the real packaged client
-3. prepare internal pilot support workflow
-4. rotate development secrets before external users
+2. verify more editor/browser/terminal combinations
+3. review provider throttling behavior during pilot usage
+4. monitor request logs and feedback reactions regularly
 
 ### Lower priority after pilot starts
+
 1. refine onboarding copy based on tester confusion
 2. tighten metrics review process
 3. decide long-term release/update workflow
 
 ## Current Truth
 
-The remaining work is now mostly manual packaged-client validation and pilot hardening.
+The main implementation work is complete.
+
+The remaining work is mostly rollout validation, package validation on more machines, and pilot operations.
 
 The main product architecture should not be redesigned at this stage.

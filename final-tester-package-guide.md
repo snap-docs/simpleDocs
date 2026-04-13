@@ -18,6 +18,7 @@ After extracting the zip, the folder contains:
 - `app\appsettings.json`
 - `docs\final-tester-package-guide.md`
 - `docs\chatgpt-tester-plan-prompt.md`
+- `README-FIRST.txt`
 
 The main file the tester should use is:
 
@@ -117,11 +118,8 @@ Ask them to report:
 - the app they were using
 - what they selected
 - what happened instead
-
-If needed, ask them to run:
-
-`export-support-bundle.ps1`
+- a screenshot if possible
 
 ## Recommended message you can send to testers
 
-Extract the zip first, then open `app\CodeExplainer.exe`. Sign in once with your redeem code. After that, you can keep using the same app folder and open the exe whenever you want. You do not need to reinstall it every time.
+Extract the zip first, then open `app\CodeExplainer.exe`. Sign in once with your redeem code. After that, you can keep using the same app folder and open the exe whenever you want. The app also starts automatically with Windows by default, and you can change that later from the tray menu.

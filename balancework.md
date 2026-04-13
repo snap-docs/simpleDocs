@@ -1,227 +1,178 @@
 # Balance Work
 
-This document tracks the real remaining work after backend hosting, client packaging, and hosted health verification.
+This document tracks the real remaining work after the current implementation and hosted deployment.
 
-## 1. Current Position
+## Current Position
 
-### Already done
+### Implemented and verified in the repo
+
 - core WPF + native capture + Hono + WebSocket architecture is preserved
 - overlay explanation flow is working
 - compact explanation style is working
-- thumbs feedback is present
-- redeem-code auth is implemented in backend and client
-- secure token storage is implemented
-- authenticated WebSocket flow is implemented
+- redeem-code auth is working in backend and client
+- secure token storage is working
+- authenticated WebSocket flow is working
 - hosted Supabase connectivity is working
-- DB tables are reachable
-- redeem codes are seeded in hosted DB
-- Azure App Service backend is deployed
-- hosted `/api/health` responds with `ok`
-- hosted redeem-code login is verified
-- hosted refresh flow is verified
-- hosted logout and token revocation are verified
-- hosted authenticated WebSocket explain flow is verified
-- hosted DB logging is verified
-- client staging and production config point to the hosted Azure backend
-- client debug build succeeds
-- client production publish succeeds
-- tester bundle build succeeds
-- sign-in UI has been polished
-- packaging/support scripts are present
+- hosted request logging is working
+- thumbs feedback is working
+- feedback is stored in `request_logs.feedback_reaction`
+- Azure App Service backend is deployed and healthy
+- production package build works
+- Windows auto-start support is implemented
+- auto-start can be toggled from the tray menu
+- Groq fallback-key support is implemented in the backend
 
-### Still not fully finished
-- one full packaged-client login against the hosted backend is still pending
-- one full packaged-client explanation request through real text selection and hotkey is still pending
-- hosted DB verification from the packaged-client WPF flow is still pending
-- packaged build still needs validation on a separate clean Windows machine
+### What is no longer a repo-code blocker
 
-## 2. Remaining Work By Priority
+- auth/session implementation
+- hosted backend connection
+- request logging implementation
+- feedback implementation
+- package generation
+- direct `CodeExplainer.exe` launch flow
 
-## Priority A: Must Complete Before Pilot
+## Real Remaining Work
 
-### A1. Full packaged-client auth verification
-Status: partly done
+The remaining work is now mostly operational and validation work, not major implementation work.
+
+## Priority A: Final rollout validation
+
+### A1. Clean-machine package validation
+
+Status: still needed
 
 Work:
-- test redeem-code login from the real WPF login UI
-- confirm invalid code behavior from the real WPF login UI
-- confirm used code behavior from the real WPF login UI
-- test app restart with stored session
-- test logout and refresh against hosted backend
+
+- unzip the latest package on a machine that is not the development machine
+- launch `app\CodeExplainer.exe`
+- confirm sign-in, tray behavior, hotkey flow, and overlay behavior
+- confirm the app can restart and restore the stored session
 
 Why it matters:
-- the hosted auth endpoints are working, but pilot readiness still requires one complete real-client pass
 
-Done when:
-- sign-in, restart, refresh, and logout work against hosted backend from the real app
+- this is the last practical package check before wider user distribution
 
-### A2. Full packaged-client explain verification
-Status: partly done
+### A2. Internal pilot validation
+
+Status: still needed
 
 Work:
-- start packaged client against hosted backend
-- redeem a real code in the real sign-in window
-- select real text in a desktop app and press the hotkey
-- verify streaming response returns correctly
-- verify overlay remains responsive
+
+- test with a small group of real users
+- cover VS Code, browser, Windows Terminal, and at least one more environment
+- collect explanation-quality and capture-quality feedback
+- review logs and thumbs feedback
 
 Why it matters:
-- this confirms the real packaged desktop path, not just direct hosted endpoint tests
 
-Done when:
-- one end-to-end hosted explanation succeeds from the real WPF client flow
+- this produces real usage evidence before expanding to more testers
 
-### A3. Packaged-client DB request logging verification
-Status: partly done
+### A3. Operations and support readiness
+
+Status: still needed
 
 Work:
-- confirm the new packaged-client `request_logs` row is created
-- confirm the related `participants` row exists or is reused
-- confirm the related `refresh_tokens` row exists
-- confirm the related `sessions` row exists/updates
-- verify final logged field values match expectations
+
+- define where testers report issues
+- define who reviews logs and DB rows
+- define how redeem codes are tracked per tester
+- prepare a short privacy/support message for pilot users
 
 Why it matters:
-- direct hosted verification is already done, but the packaged-client path must also be proven for the study
 
-Done when:
-- one successful packaged-client request creates the expected rows in all related tables
+- pilot users will need a reliable response path when something goes wrong
 
-## Priority B: Strongly Recommended Before External Users
+## Priority B: Hardening and rollout safety
 
-### B1. Internal pilot validation
-Status: not done
+### B1. Multi-environment QA
 
-Work:
-- test on 3 to 5 internal users
-- cover VS Code, browser, Windows Terminal, classic terminal
-- collect support bundles
-- record auth issues, capture issues, and explanation quality issues
-
-Done when:
-- internal pilot completes without critical blockers
-
-### B2. Packaging validation
-Status: mostly done
-
-Work:
-- verify the published client on a clean Windows machine
-- verify tester-bundle launch on a clean Windows machine
-- confirm launcher works outside the dev machine
-- confirm no dev-only files are required
-
-Done when:
-- a tester can run the packaged build without source-code setup
-
-### B3. Support and operations flow
 Status: partly done
 
 Work:
-- decide who receives tester issues
-- decide where support bundles are sent
-- define code issuance tracking
-- define how pilot issues are triaged
 
-Done when:
-- support process is written and usable by the team
-
-### B4. Privacy and tester guidance
-Status: partly done
-
-Work:
-- finalize tester-facing privacy note
-- clearly state that selected text and background context may be processed
-- tell testers what they should not select
-
-Done when:
-- tester package includes clear privacy/use guidance
-
-## Priority C: Quality and Hardening
-
-### C1. Multi-environment QA
-Status: not done
-
-Work:
 - Windows 10 and Windows 11 validation
 - multiple DPI/scaling tests
 - multiple monitor checks
-- different browsers and terminals
+- more app coverage beyond the main dev machine
 
-### C2. Error handling validation
-Status: partly done
+### B2. Secret hygiene
 
-Work:
-- confirm backend-unavailable behavior
-- confirm WebSocket disconnect behavior
-- confirm token refresh failure path
-- confirm sign-in recovery UX
-
-### C3. Secret hygiene
-Status: not done
+Status: still needed
 
 Work:
-- rotate any temporary API keys used during development
-- ensure only final deployment secrets remain
-- confirm no secrets are bundled into published client files
 
-## 3. Detailed Verification Matrix
+- rotate any temporary development API keys
+- confirm only final deployment secrets remain in Azure and local env files
+- confirm no secrets are bundled into the published client files
 
-## Auth
+### B3. Hosted monitoring rhythm
+
+Status: still needed
+
+Work:
+
+- decide how often to review `request_logs`
+- review `feedback_reaction` during pilot
+- watch provider failures or throttling behavior
+- confirm fallback-key behavior if the main Groq key hits limits
+
+## Current Validation Matrix
+
+### Auth
+
 - redeem code accepted
 - invalid code rejected cleanly
 - used code rejected cleanly
 - refresh works
-- logout revokes refresh token
+- logout works
 - app restart restores session
 
-## Streaming
+### Streaming
+
 - authenticated WebSocket connects
 - first token arrives promptly
 - complete message is received
 - overlay status updates correctly
 
-## Logging
-- session id is created
+### Logging
+
 - request id is unique
 - final request row is written only once
-- DB failure does not block user-visible output
+- DB failure does not block first visible output
+- `feedback_reaction` can be updated later from the overlay
 
-## Feedback
-- thumbs appear only when real response text is visible
-- only one reaction per response
-- reaction is logged without breaking the response flow
+### Package
 
-## 4. Suggested Execution Order
+- zip is generated successfully
+- package contains only the needed runtime and tester docs
+- app launches directly from `CodeExplainer.exe`
+- clean-machine validation is still recommended before wider rollout
 
-1. complete one manual packaged-client sign-in
-2. complete one manual packaged-client hotkey explanation
-3. verify the DB rows created by that packaged-client run
-4. verify the packaged release on a clean Windows machine
-5. internal pilot
-6. fix pilot issues
-7. external pilot
+## Suggested Execution Order
 
-## 5. Deployment Blockers Right Now
+1. validate the latest package on a clean Windows machine
+2. run a short internal pilot
+3. monitor hosted logs and feedback reactions
+4. fix pilot issues with the highest signal
+5. expand to more testers
 
-These are the real blockers preventing a true pilot release today:
-- no confirmed end-to-end live auth + explain + DB log test yet from the real packaged WPF client
-- packaged build has not yet been validated on a clean tester machine
+## What Should Not Change Right Now
 
-## 6. What Should Not Change Now
+To keep risk low before the pilot, we should not redesign these:
 
-To keep risk low, we should not redesign these before the pilot:
 - capture architecture
 - overlay architecture
 - WebSocket streaming architecture
 - WPF client platform choice
 - backend framework choice
 
-## 7. Definition Of Done For Pilot Start
+## Pilot Start Definition
 
 We can call the system pilot-ready when:
+
 - hosted auth works
 - hosted logging works
 - packaged client works
-- one packaged-client real sign-in and hotkey flow is verified
+- one clean-machine package run is confirmed
 - internal users complete real tasks successfully
 - no critical blocker remains in capture, overlay, or session flow
