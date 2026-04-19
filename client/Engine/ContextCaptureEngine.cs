@@ -136,6 +136,10 @@ namespace CodeExplainer.Engine
                 $"strategy={strategy.GetType().Name} selected_method={result.SelectedMethod.ToApiValue()} background_method={result.BackgroundMethod.ToApiValue()} " +
                 $"selected_chars={selectedChars} background_chars={backgroundChars} is_partial={result.IsPartial} is_unsupported={result.IsUnsupported} " +
                 $"status=\"{statusPreview}\" duration_ms={durationMs}");
+
+            // VERIFICATION LOGGING: Print full captured text to the log
+            RuntimeLog.Info("CaptureDEBUG", $"req={requestId} EXACT_SELECTED_TEXT_START\n{result.SelectedText}\nEXACT_SELECTED_TEXT_END");
+            RuntimeLog.Info("CaptureDEBUG", $"req={requestId} EXACT_BACKGROUND_CONTEXT_START\n{result.BackgroundContext}\nEXACT_BACKGROUND_CONTEXT_END");
         }
     }
 }

@@ -307,6 +307,15 @@ namespace CodeExplainer.Engine.Strategies
 
                         try
                         {
+                            expanded.ExpandToEnclosingUnit(System.Windows.Automation.Text.TextUnit.Line);
+                        }
+                        catch
+                        {
+                            // Some providers do not support line expansion cleanly.
+                        }
+
+                        try
+                        {
                             expanded.MoveEndpointByUnit(System.Windows.Automation.Text.TextPatternRangeEndpoint.Start, System.Windows.Automation.Text.TextUnit.Line, -linesUp);
                         }
                         catch

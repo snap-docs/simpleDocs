@@ -263,6 +263,7 @@ namespace CodeExplainer
             if (captureResult.HasSelectedText)
             {
                 RuntimeLog.Info("Capture", $"req={requestId} Selected preview: {RuntimeLog.Preview(captureResult.SelectedText)}");
+                RuntimeLog.Info("Capture", $"req={requestId} Selected full: {EscapeForSingleLineLog(captureResult.SelectedText)}");
             }
             else
             {
@@ -272,6 +273,7 @@ namespace CodeExplainer
             if (!string.IsNullOrWhiteSpace(captureResult.BackgroundContext))
             {
                 RuntimeLog.Info("Capture", $"req={requestId} Background preview: {RuntimeLog.Preview(captureResult.BackgroundContext)}");
+                RuntimeLog.Info("Capture", $"req={requestId} Background full: {EscapeForSingleLineLog(captureResult.BackgroundContext)}");
             }
 
             if (captureResult.IsUnsupported)
@@ -487,6 +489,20 @@ namespace CodeExplainer
         {
             string mode = captureResult.IsPartial ? "partial" : "full";
             return $"{captureResult.Type.ToApiValue()} | {captureResult.SelectedMethod.ToApiValue()} + {captureResult.BackgroundMethod.ToApiValue()} | {mode}";
+        }
+
+        private static string EscapeForSingleLineLog(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "<empty>";
+            }
+
+            return text
+                .Replace("\\", "\\\\")
+                .Replace("\r", "\\r")
+                .Replace("\n", "\\n")
+                .Trim();
         }
 
         private void ExitApp()

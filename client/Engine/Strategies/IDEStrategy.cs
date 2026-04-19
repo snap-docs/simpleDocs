@@ -32,7 +32,8 @@ namespace CodeExplainer.Engine.Strategies
                 window,
                 _compatibilityMode,
                 preferMsaaFirst: false,
-                allowMsaaFocusedFallback: false);
+                allowMsaaFocusedFallback: false,
+                allowOcrFallback: false);
 
             CapturePipelines.BackgroundCaptureOutcome background =
                 CapturePipelines.CaptureEditorBackground(window, maxChars: 10000, selectedTextHint: selected.Text);
@@ -50,62 +51,74 @@ namespace CodeExplainer.Engine.Strategies
             bool ocrUsed = false;
             float ocrConfidence = 0f;
 
+            // OCR is intentionally disabled for selected_text in IDE editor mode.
+            // Selected text must come from UIA/MSAA/clipboard compatibility paths only.
             if (!selected.Success)
             {
-                RuntimeLog.Info("IDE", "UIA/MSAA/clipboard all failed – attempting OCR selected-text fallback for editor.");
-                var ocrResult = await OcrCapture.CaptureWithConfidenceAsync(window, OcrCaptureArea.EditorViewport);
+                RuntimeLog.Warn("IDE", "Selected text capture failed via UIA/MSAA/clipboard. OCR selected-text fallback is disabled by policy.");
+            }
 
-                if (ocrResult.IsUsable(OcrCapture.SelectedTextThreshold))
+            if (background.IsMetadataFallback)
+            {
+                string? expandedCompatBackground = await _compatibilityMode.TryCaptureExpandedEditorBackgroundTextAsync(window, selected.Text);
+                if (!string.IsNullOrWhiteSpace(expandedCompatBackground))
                 {
-                    // High-confidence OCR → promote to selected_text
-                    selected = new CapturePipelines.SelectedCaptureOutcome
+                    background = new CapturePipelines.BackgroundCaptureOutcome
                     {
-                        Text   = ocrResult.Text,
-                        Method = CaptureMethod.OcrVisualCapture,
-                        Status = $"Selected text captured via OCR fallback (confidence {ocrResult.Confidence:F2})."
+                        Text = expandedCompatBackground,
+                        Method = CaptureMethod.ClipboardCompatibility,
+                        Status = "Background context captured via expanded clipboard compatibility fallback.",
+                        IsMetadataFallback = false
                     };
-                    ocrUsed = true;
-                    ocrConfidence = ocrResult.Confidence;
                 }
-                else if (ocrResult.IsUsable(OcrCapture.BackgroundThreshold))
+                else
                 {
-                    // Medium-confidence OCR → use as background only
-                    RuntimeLog.Info("IDE", $"OCR medium confidence ({ocrResult.Confidence:F2}) – using as background_context only.");
-                    if (string.IsNullOrWhiteSpace(background.Text))
+                    string? compatBackground = await _compatibilityMode.TryCaptureEditorBackgroundTextAsync(window, selected.Text);
+                    if (!string.IsNullOrWhiteSpace(compatBackground))
                     {
                         background = new CapturePipelines.BackgroundCaptureOutcome
                         {
-                            Text   = ocrResult.Text,
-                            Method = CaptureMethod.OcrVisualCapture,
-                            Status = $"Background captured via OCR fallback (confidence {ocrResult.Confidence:F2}).",
+                            Text = compatBackground,
+                            Method = CaptureMethod.ClipboardCompatibility,
+                            Status = "Background context captured via clipboard compatibility fallback.",
                             IsMetadataFallback = false
                         };
                     }
+                }
+            }
+
+            // ── Tier 4: OCR last resort ──────────────────────────────────────────
+            // Fires only when all UIA, MSAA, and clipboard compat paths have failed.
+            // Uses EditorViewport crop to avoid capturing sidebar/panel chrome.
+            // This covers edge cases: unusual VS Code themes, GPU-rendered editors,
+            // accessibility completely disabled, or Ctrl+L not bound in the user's config.
+            if (background.IsMetadataFallback)
+            {
+                RuntimeLog.Warn("IDE", "All structured background capture paths failed. Attempting OCR last resort on editor viewport.");
+                var ocrResult = await OcrCapture.CaptureWithConfidenceAsync(window, OcrCaptureArea.EditorViewport);
+                if (ocrResult.IsUsable(OcrCapture.BackgroundThreshold))
+                {
+                    RuntimeLog.Info("IDE", $"OCR last resort succeeded for {window.ProcessName} (confidence {ocrResult.Confidence:F2}, chars {ocrResult.Text.Length}).");
+                    background = new CapturePipelines.BackgroundCaptureOutcome
+                    {
+                        Text = ocrResult.Text,
+                        Method = CaptureMethod.OcrVisualCapture,
+                        Status = $"IDE editor background captured via OCR last resort (confidence {ocrResult.Confidence:F2}).",
+                        IsMetadataFallback = false
+                    };
                     ocrUsed = true;
                     ocrConfidence = ocrResult.Confidence;
                 }
                 else
                 {
-                    RuntimeLog.Warn("IDE", $"OCR confidence too low ({ocrResult.Confidence:F2}) – discarding OCR result.");
-                }
-            }
-
-            // ── OCR background fallback (when background is only metadata) ─────
-            if (!ocrUsed && background.IsMetadataFallback)
-            {
-                RuntimeLog.Info("IDE", "Editor background is metadata-only – attempting OCR background fallback.");
-                var ocrBg = await OcrCapture.CaptureWithConfidenceAsync(window, OcrCaptureArea.EditorViewport);
-                if (ocrBg.IsUsable(OcrCapture.BackgroundThreshold))
-                {
+                    RuntimeLog.Warn("IDE", $"OCR last resort returned insufficient confidence ({ocrResult.Confidence:F2}). Background will be empty.");
                     background = new CapturePipelines.BackgroundCaptureOutcome
                     {
-                        Text   = ocrBg.Text,
-                        Method = CaptureMethod.OcrVisualCapture,
-                        Status = $"Editor background captured via OCR fallback (confidence {ocrBg.Confidence:F2}).",
-                        IsMetadataFallback = false
+                        Text = string.Empty,
+                        Method = CaptureMethod.Unsupported,
+                        Status = "IDE editor background unavailable from all structured and OCR paths.",
+                        IsMetadataFallback = true
                     };
-                    ocrUsed = true;
-                    ocrConfidence = ocrBg.Confidence;
                 }
             }
 
@@ -283,5 +296,9 @@ namespace CodeExplainer.Engine.Strategies
             double overlapRatio = (double)commonPrefix / selectedNormalized.Length;
             return overlapRatio >= 0.85;
         }
+
+        // NOTE:
+        // IDE editor OCR helpers were removed intentionally.
+        // OCR remains enabled for terminal strategies only.
     }
 }

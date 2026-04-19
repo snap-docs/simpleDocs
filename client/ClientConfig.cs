@@ -80,6 +80,7 @@ namespace CodeExplainer
 
             target.Backend.ApiBaseUrl = source.Backend.ApiBaseUrl ?? target.Backend.ApiBaseUrl;
             target.Backend.WsBaseUrl = source.Backend.WsBaseUrl ?? target.Backend.WsBaseUrl;
+            target.Auth.Enabled = source.Auth.Enabled ?? target.Auth.Enabled;
             target.Auth.RefreshSkewSeconds = source.Auth.RefreshSkewSeconds ?? target.Auth.RefreshSkewSeconds;
             target.Streaming.ConnectTimeoutSeconds = source.Streaming.ConnectTimeoutSeconds ?? target.Streaming.ConnectTimeoutSeconds;
             target.Streaming.RetryCount = source.Streaming.RetryCount ?? target.Streaming.RetryCount;

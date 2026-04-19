@@ -36,7 +36,8 @@ namespace CodeExplainer.Engine.Strategies
             ActiveWindowInfo window,
             ClipboardCompatibilityMode compatibilityMode,
             bool preferMsaaFirst,
-            bool allowMsaaFocusedFallback = true)
+            bool allowMsaaFocusedFallback = true,
+            bool allowOcrFallback = true)
         {
             bool isGoogleDocs = window.Title.IndexOf("Google Docs", System.StringComparison.OrdinalIgnoreCase) >= 0;
 
@@ -168,7 +169,7 @@ namespace CodeExplainer.Engine.Strategies
 
             bool allowCompatWithoutSignal = compatibilityMode.Enabled
                 && (
-                    (IsVsCodeLike(window.ProcessName) && UiAutomationCapture.IsEditorContentFocusedElement()) 
+                    ClipboardCompatibilityMode.IsIdeProcess(window.ProcessName) 
                     || isGoogleDocs
                 );
 
@@ -227,17 +228,20 @@ namespace CodeExplainer.Engine.Strategies
                 ? " VS Code/Cursor may require accessibility support set to On or Auto for non-clipboard selection capture."
                 : string.Empty;
 
-            // OCR fallback – attempt when UIA/MSAA/clipboard all failed
-            var ocrText = await OcrCapture.CaptureAsync(window);
-            if (!string.IsNullOrWhiteSpace(ocrText))
+            // OCR fallback – attempt when UIA/MSAA/clipboard all failed (optional per strategy)
+            if (allowOcrFallback)
             {
-                RuntimeLog.Info("CapturePipeline", $"OCR fallback succeeded for {window.ProcessName}");
-                return new SelectedCaptureOutcome
+                var ocrText = await OcrCapture.CaptureAsync(window);
+                if (!string.IsNullOrWhiteSpace(ocrText))
                 {
-                    Text = ocrText,
-                    Method = CaptureMethod.OcrVisualCapture,
-                    Status = "Background text captured via native OCR fallback."
-                };
+                    RuntimeLog.Info("CapturePipeline", $"OCR fallback succeeded for {window.ProcessName}");
+                    return new SelectedCaptureOutcome
+                    {
+                        Text = ocrText,
+                        Method = CaptureMethod.OcrVisualCapture,
+                        Status = "Background text captured via native OCR fallback."
+                    };
+                }
             }
 
             // If OCR also fails, return unsupported outcome
@@ -333,8 +337,40 @@ namespace CodeExplainer.Engine.Strategies
             bool isVsCodeLike = IsVsCodeLike(window.ProcessName);
             var candidates = new List<BackgroundCandidate>();
 
+            // ── Tier 1A: Selection-anchored neighbor lines (HIGHEST PRIORITY for all IDEs)
+            // This is anchored to the cursor position and immune to sidebar/panel capture.
+            TryAddEditorBackgroundCandidate(
+                candidates,
+                window,
+                (int limit, out string text) => UiAutomationCapture.TryGetNeighborLinesViaTextRange(limit, 14, 14, out text),
+                maxChars,
+                selectedTextHint,
+                CaptureMethod.IdeContextTextRange,
+                "Background context captured via UIA selection-anchored neighbor lines.");
+
+            // ── Tier 1B: Document range from focused element
+            TryAddEditorBackgroundCandidate(
+                candidates,
+                window,
+                UiAutomationCapture.TryGetDocumentRangeText,
+                maxChars,
+                selectedTextHint,
+                CaptureMethod.UiaTextPatternDocumentRange,
+                "Background context captured via UIA document range.");
+
             if (isVsCodeLike)
             {
+                // ── Tier 1C: Document range via descendant walk (VS Code specific)
+                TryAddEditorBackgroundCandidate(
+                    candidates,
+                    window,
+                    UiAutomationCapture.TryGetDocumentRangeTextFromDescendants,
+                    maxChars,
+                    selectedTextHint,
+                    CaptureMethod.UiaTextPatternDocumentRange,
+                    "Background context captured via descendant UIA document range.");
+
+                // ── Tier 1D: Visible ranges (can capture sidebar — filtered by sidebar detector)
                 TryAddEditorBackgroundCandidate(
                     candidates,
                     window,
@@ -353,39 +389,9 @@ namespace CodeExplainer.Engine.Strategies
                     CaptureMethod.UiaTextPatternVisibleRanges,
                     "Background context captured via descendant UIA visible ranges.");
             }
-
-            TryAddEditorBackgroundCandidate(
-                candidates,
-                window,
-                UiAutomationCapture.TryGetDocumentRangeText,
-                maxChars,
-                selectedTextHint,
-                CaptureMethod.UiaTextPatternDocumentRange,
-                "Background context captured via UIA document range.");
-
-            if (isVsCodeLike)
+            else
             {
-                TryAddEditorBackgroundCandidate(
-                    candidates,
-                    window,
-                    UiAutomationCapture.TryGetDocumentRangeTextFromDescendants,
-                    maxChars,
-                    selectedTextHint,
-                    CaptureMethod.UiaTextPatternDocumentRange,
-                    "Background context captured via descendant UIA document range.");
-            }
-
-            TryAddEditorBackgroundCandidate(
-                candidates,
-                window,
-                (int limit, out string text) => UiAutomationCapture.TryGetNeighborLinesViaTextRange(limit, 12, 12, out text),
-                maxChars,
-                selectedTextHint,
-                CaptureMethod.IdeContextTextRange,
-                "Background context captured via UIA selection-anchored neighbor lines.");
-
-            if (!isVsCodeLike)
-            {
+                // Non-VS Code IDEs: visible ranges are usually safe (no sidebar tree mixing)
                 TryAddEditorBackgroundCandidate(
                     candidates,
                     window,
@@ -396,6 +402,7 @@ namespace CodeExplainer.Engine.Strategies
                     "Background context captured via UIA visible ranges.");
             }
 
+            // ── Tier 2: Container walks
             TryAddEditorBackgroundCandidate(
                 candidates,
                 window,
@@ -707,22 +714,39 @@ namespace CodeExplainer.Engine.Strategies
                 _ => method.ToApiValue()
             };
 
-            if (IsRejectedIdeBackgroundSource(window, rawText))
-            {
-                RuntimeLog.Warn("CapturePipeline", $"Rejected raw {sourceLabel} background for {window.ProcessName}: source looked like IDE chrome or UI noise.");
-                return;
-            }
-
+            // ── FIXED: Clean noise FIRST, then reject on the cleaned text.
+            // Previously IsRejectedIdeBackgroundSource ran on raw dirty text, discarding
+            // real code that happened to share a blob with a noise phrase.
             string cleaned = CleanKnownUiNoise(window, rawText, maxChars);
             if (string.IsNullOrWhiteSpace(cleaned))
             {
-                RuntimeLog.Warn("CapturePipeline", $"Rejected cleaned {sourceLabel} background for {window.ProcessName}: nothing usable remained after cleaning.");
+                RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: empty after noise cleaning.");
+                return;
+            }
+
+            if (IsRejectedIdeBackgroundSource(window, cleaned))
+            {
+                RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: cleaned text still looks like IDE chrome or UI noise.");
+                return;
+            }
+
+            // ── Sidebar content detector: reject VS Code file-tree dumps
+            if (LooksLikeSidebarContent(cleaned))
+            {
+                RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: candidate looks like sidebar/file-tree content.");
+                return;
+            }
+
+            cleaned = RefineEditorBackgroundCandidate(cleaned, selectedTextHint, maxChars);
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                RuntimeLog.Warn("CapturePipeline", $"Rejected refined {sourceLabel} background for {window.ProcessName}: nothing usable remained after refining.");
                 return;
             }
 
             if (LooksLikeEditorBackgroundNoise(cleaned))
             {
-                RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: still looked like editor chrome or noise after cleaning.");
+                RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: still looks like editor chrome after refining.");
                 return;
             }
 
@@ -739,8 +763,9 @@ namespace CodeExplainer.Engine.Strategies
                 return;
             }
 
+            // ── FIXED: Lowered threshold from 0.40 → 0.20 (upstream gates are the real guard)
             float score = ScoreBackgroundCandidate(cleaned, selectedTextHint);
-            if (score < 0.40f)
+            if (score < 0.20f)
             {
                 RuntimeLog.Warn("CapturePipeline", $"Rejected {sourceLabel} background for {window.ProcessName}: score {score:F2} below threshold.");
                 return;
@@ -860,7 +885,7 @@ namespace CodeExplainer.Engine.Strategies
                 && (candidate.Split('\n').Length >= 2 || candidate.Length >= selected.Length + 25);
         }
 
-        private static bool AddsUsefulBackgroundContext(string text, string? selectedTextHint)
+        internal static bool AddsUsefulBackgroundContext(string text, string? selectedTextHint)
         {
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -884,7 +909,27 @@ namespace CodeExplainer.Engine.Strategies
                 return false;
             }
 
+            string collapsedCandidate = CollapseWhitespace(candidate);
+            string collapsedSelected = CollapseWhitespace(selected);
+            if (string.Equals(collapsedCandidate, collapsedSelected, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if ((collapsedCandidate.Contains(collapsedSelected, System.StringComparison.OrdinalIgnoreCase)
+                    || collapsedSelected.Contains(collapsedCandidate, System.StringComparison.OrdinalIgnoreCase))
+                && System.Math.Abs(collapsedCandidate.Length - collapsedSelected.Length) < 24)
+            {
+                return false;
+            }
+
             int candidateLines = candidate.Split('\n').Length;
+            int distinctContextLines = CountDistinctContextLines(candidate, selected);
+            if (distinctContextLines == 0)
+            {
+                return false;
+            }
+
             if (candidateLines >= 2)
             {
                 return true;
@@ -903,6 +948,261 @@ namespace CodeExplainer.Engine.Strategies
             }
 
             return candidate.Length >= 40;
+        }
+
+        internal static string RefineEditorBackgroundForExternalUse(string text, string? selectedTextHint, int maxChars)
+        {
+            return RefineEditorBackgroundCandidate(text, selectedTextHint, maxChars);
+        }
+
+        private static string RefineEditorBackgroundCandidate(string text, string? selectedTextHint, int maxChars)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return string.Empty;
+            }
+
+            string normalized = text.Replace("\r\n", "\n").Trim();
+            string[] rawLines = normalized.Split('\n');
+            var keptLines = new System.Collections.Generic.List<string>();
+            foreach (string rawLine in rawLines)
+            {
+                string line = rawLine.TrimEnd();
+                if (ShouldDiscardEditorNoiseLine(line))
+                {
+                    continue;
+                }
+
+                keptLines.Add(line);
+            }
+
+            if (keptLines.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedTextHint))
+            {
+                int anchorIndex = FindAnchorLineIndex(keptLines, selectedTextHint!);
+                if (anchorIndex >= 0)
+                {
+                    int selectedLines = System.Math.Max(1, selectedTextHint!.Replace("\r\n", "\n").Split('\n').Length);
+                    // FIXED: Expand background context capture window drastically.
+                    // Grab up to 60 lines above, and 60 lines down (was 6 and 8).
+                    int start = System.Math.Max(0, anchorIndex - 60);
+                    int end = System.Math.Min(keptLines.Count - 1, anchorIndex + selectedLines + 60);
+                    keptLines = keptLines.GetRange(start, end - start + 1);
+                }
+            }
+
+            var builder = new StringBuilder();
+            foreach (string line in keptLines)
+            {
+                if (builder.Length > 0)
+                {
+                    builder.Append('\n');
+                }
+
+                builder.Append(line);
+                if (builder.Length >= maxChars)
+                {
+                    break;
+                }
+            }
+
+            string output = builder.ToString().Trim();
+            if (output.Length > maxChars)
+            {
+                output = output.Substring(0, maxChars);
+            }
+
+            return output;
+        }
+
+        private static int FindAnchorLineIndex(System.Collections.Generic.List<string> lines, string selectedTextHint)
+        {
+            string selected = selectedTextHint.Replace("\r\n", "\n").Trim();
+            if (selected.Length == 0)
+            {
+                return -1;
+            }
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].IndexOf(selected, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return i;
+                }
+            }
+
+            string[] tokens = ExtractContextTokens(selected);
+            if (tokens.Length == 0)
+            {
+                return -1;
+            }
+
+            int bestIndex = -1;
+            int bestHits = 0;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                int hits = 0;
+                foreach (string token in tokens)
+                {
+                    if (lines[i].IndexOf(token, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        hits++;
+                    }
+                }
+
+                if (hits > bestHits)
+                {
+                    bestHits = hits;
+                    bestIndex = i;
+                }
+            }
+
+            return bestHits >= System.Math.Min(2, tokens.Length) ? bestIndex : -1;
+        }
+
+        private static int CountDistinctContextLines(string candidate, string selected)
+        {
+            string[] candidateLines = candidate.Replace("\r\n", "\n").Split('\n');
+            string[] selectedLines = selected.Replace("\r\n", "\n").Split('\n');
+            var selectedSet = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+
+            foreach (string line in selectedLines)
+            {
+                string normalized = CollapseWhitespace(line);
+                if (normalized.Length > 0)
+                {
+                    selectedSet.Add(normalized);
+                }
+            }
+
+            int distinct = 0;
+            foreach (string line in candidateLines)
+            {
+                string normalized = CollapseWhitespace(line);
+                if (normalized.Length == 0)
+                {
+                    continue;
+                }
+
+                if (!selectedSet.Contains(normalized))
+                {
+                    distinct++;
+                }
+            }
+
+            return distinct;
+        }
+
+        private static string CollapseWhitespace(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder();
+            bool previousWasWhitespace = false;
+            foreach (char c in text)
+            {
+                if (char.IsWhiteSpace(c))
+                {
+                    if (!previousWasWhitespace)
+                    {
+                        builder.Append(' ');
+                        previousWasWhitespace = true;
+                    }
+
+                    continue;
+                }
+
+                builder.Append(c);
+                previousWasWhitespace = false;
+            }
+
+            return builder.ToString().Trim();
+        }
+
+        private static bool ShouldDiscardEditorNoiseLine(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                return true;
+            }
+
+            string trimmed = line.Trim();
+            string lower = trimmed.ToLowerInvariant();
+
+            if (ContainsKnownUiNoise(trimmed))
+            {
+                return true;
+            }
+
+            string[] exactLabels =
+            {
+                "explorer",
+                "search",
+                "source control",
+                "run and debug",
+                "extensions",
+                "outline",
+                "problems",
+                "output",
+                "debug console",
+                "terminal",
+                "ports",
+                "welcome",
+                "application menu",
+                "open codex sidebar",
+                "c# project details",
+                "inline bookmarks"
+            };
+
+            foreach (string label in exactLabels)
+            {
+                if (lower.Equals(label, System.StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            int letterOrDigitCount = 0;
+            int punctuationCount = 0;
+            foreach (char c in trimmed)
+            {
+                if (char.IsLetterOrDigit(c))
+                {
+                    letterOrDigitCount++;
+                }
+                else if ("{}[]();.,:=<>\"'/_".IndexOf(c) >= 0)
+                {
+                    punctuationCount++;
+                }
+            }
+
+            if (letterOrDigitCount <= 1 && punctuationCount == 0)
+            {
+                return true;
+            }
+
+            if (trimmed.Length < 24 && !HasCodeSignal(trimmed) && punctuationCount == 0 && letterOrDigitCount < 6)
+            {
+                return true;
+            }
+
+            if ((lower.EndsWith(".cs", System.StringComparison.Ordinal)
+                    || lower.EndsWith(".json", System.StringComparison.Ordinal)
+                    || lower.EndsWith(".csproj", System.StringComparison.Ordinal))
+                && !HasCodeSignal(trimmed)
+                && trimmed.Length < 48)
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private static string[] ExtractContextTokens(string text)
@@ -966,7 +1266,86 @@ namespace CodeExplainer.Engine.Strategies
                 || normalizedText.IndexOf("ProcessName:", System.StringComparison.OrdinalIgnoreCase) >= 0
                 || normalizedText.IndexOf("screen reader in Google Docs", System.StringComparison.OrdinalIgnoreCase) >= 0
                 || normalizedText.IndexOf("screen reader support", System.StringComparison.OrdinalIgnoreCase) >= 0
-                || normalizedText.IndexOf("Braille support is", System.StringComparison.OrdinalIgnoreCase) >= 0;
+                || normalizedText.IndexOf("Braille support is", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || normalizedText.IndexOf("language server crashed", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || normalizedText.IndexOf("source: C/C++, notification", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || normalizedText.IndexOf("notification, Inspect the response", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>
+        /// Detects VS Code sidebar / file-explorer tree dumps that UIA visible-ranges
+        /// occasionally returns instead of editor code. These look like:
+        ///   JobApi\nControllers\nModels\nProperties\n0 references\nINLINE BOOKMARKS...
+        /// They contain code-like tokens (class names, IActionResult) so HasCodeSignal
+        /// cannot filter them alone.
+        /// </summary>
+        private static bool LooksLikeSidebarContent(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            string lower = text.ToLowerInvariant();
+
+            // Count explicit sidebar marker phrases
+            string[] sidebarMarkers =
+            {
+                "\ncontrollers\n", "\nmodels\n", "\nproperties\n",
+                "0 references", "inline bookmarks", "appsettings.",
+                "?? inline", "\nviews\n", "\npages\n", "\nwwwroot\n",
+                "\nservices\n", "\nrepositories\n", "\ninterfaces\n",
+                ".csproj.lscache", "\nmigrations\n", "run and debug",
+                "source control"
+            };
+
+            int sidebarHits = 0;
+            foreach (string marker in sidebarMarkers)
+            {
+                if (lower.Contains(marker))
+                {
+                    sidebarHits++;
+                }
+            }
+
+            // 3+ sidebar markers = almost certainly a file tree dump
+            if (sidebarHits >= 3)
+            {
+                return true;
+            }
+
+            // Secondary check: high ratio of short non-code lines (file/folder names)
+            string[] allLines = text.Replace("\r\n", "\n").Split('\n');
+            if (allLines.Length < 4)
+            {
+                return false;
+            }
+
+            int shortLabelLines = 0;
+            int totalNonEmpty = 0;
+            foreach (string rawLine in allLines)
+            {
+                string t = rawLine.Trim();
+                if (t.Length == 0)
+                {
+                    continue;
+                }
+
+                totalNonEmpty++;
+                // Short line with no code punctuation = likely a label or folder name
+                if (t.Length < 35 && !HasCodeSignal(t))
+                {
+                    shortLabelLines++;
+                }
+            }
+
+            if (totalNonEmpty == 0)
+            {
+                return false;
+            }
+
+            // >70% of non-empty lines are short non-code labels → sidebar dump
+            return (double)shortLabelLines / totalNonEmpty > 0.70;
         }
 
         private static bool LooksLikeIdeChromeLabelsOnly(string text)
@@ -1163,3 +1542,5 @@ namespace CodeExplainer.Engine.Strategies
         }
     }
 }
+
+

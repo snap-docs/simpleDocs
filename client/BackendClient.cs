@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.Http.Headers;
+using System.Net;
 
 namespace CodeExplainer
 {
@@ -187,7 +188,7 @@ namespace CodeExplainer
             bool isUnsupported)
         {
             Exception? lastError = null;
-            Uri wsUri = new Uri($"{_config.WsBaseUrl}/ws/stream");
+            Uri wsUri = BuildWebSocketUri(accessToken);
 
             for (int attempt = 1; attempt <= Math.Max(1, _config.WebSocketRetryCount); attempt++)
             {
@@ -202,7 +203,7 @@ namespace CodeExplainer
                 {
                     RuntimeLog.Info(
                         "Backend",
-                        $"req={requestId} stage=connecting attempt={attempt} url={wsUri} selected_chars={selectedChars} background_chars={backgroundChars} env={environmentType} selected_method={selectedMethod} background_method={backgroundMethod} partial={isPartial} unsupported={isUnsupported}");
+                        $"req={requestId} stage=connecting attempt={attempt} url={MaskAccessToken(wsUri)} selected_chars={selectedChars} background_chars={backgroundChars} env={environmentType} selected_method={selectedMethod} background_method={backgroundMethod} partial={isPartial} unsupported={isUnsupported} token_present={!string.IsNullOrWhiteSpace(accessToken)}");
                     await ws.ConnectAsync(wsUri, cts.Token);
                     RuntimeLog.Info("Backend", $"req={requestId} stage=connected attempt={attempt}");
                     return ws;
@@ -221,6 +222,40 @@ namespace CodeExplainer
             }
 
             throw new HttpRequestException($"Unable to connect to backend WebSocket. {lastError?.Message}", lastError);
+        }
+
+        private static Uri BuildWebSocketUri(string accessToken)
+        {
+            string baseUrl = _config.WsBaseUrl?.TrimEnd('/') ?? string.Empty;
+            string fullUrl = $"{baseUrl}/ws/stream";
+
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                return new Uri(fullUrl);
+            }
+
+            string separator = fullUrl.Contains("?") ? "&" : "?";
+            string encodedToken = WebUtility.UrlEncode(accessToken);
+            return new Uri($"{fullUrl}{separator}access_token={encodedToken}");
+        }
+
+        private static string MaskAccessToken(Uri uri)
+        {
+            string value = uri.ToString();
+            int tokenIndex = value.IndexOf("access_token=", StringComparison.OrdinalIgnoreCase);
+            if (tokenIndex < 0)
+            {
+                return value;
+            }
+
+            int tokenValueStart = tokenIndex + "access_token=".Length;
+            int tokenValueEnd = value.IndexOf('&', tokenValueStart);
+            if (tokenValueEnd < 0)
+            {
+                tokenValueEnd = value.Length;
+            }
+
+            return value.Substring(0, tokenValueStart) + "<redacted>" + value.Substring(tokenValueEnd);
         }
 
         private static bool HandleSocketMessage(
