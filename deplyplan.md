@@ -1,167 +1,263 @@
-# Deployment Plan
+# Deployment README
 
-## Current Stage
+## Purpose
 
-The project is now in implemented-and-hosted pilot stage.
+This file is the current deployment reference for `simpleDocs`.
 
-The main application flow is already working in its intended structure:
+It only covers deployment, hosting, tester delivery, runtime behavior, and operational checks.
 
-- Windows WPF client
-- native capture engine
-- Node.js Hono backend
-- WebSocket streaming
-- floating overlay response UI
-- hosted Supabase auth and request logging
-- Azure-hosted backend
+It does not document full product architecture or capture internals.
 
-## Current Deployment Topology
+## Current Deployment State
 
-### Client side
+The project is in hosted pilot stage.
 
-- WPF desktop client runs on the tester's Windows machine
-- client handles capture, hotkey, local auth restore, tray UI, and overlay rendering
-- client stores auth state locally with DPAPI
-- client can auto-start with Windows using a Registry `Run` entry
-- auto-start is enabled by default and can be toggled from the tray menu
+Current live topology:
 
-### Backend side
+- Windows WPF client runs on the tester machine
+- Node.js Hono backend runs on Azure App Service
+- Supabase/Postgres stores auth and study logs
+- WebSocket streaming is used for explanations
+- redeem-code auth is required in hosted production mode
 
-- Azure App Service hosts the Node.js backend
-- backend exposes auth endpoints and authenticated WebSocket streaming
-- backend handles classification, prompt construction, provider routing, and post-response logging
-- Groq is the primary AI provider
-- backend now supports a fallback Groq key and can still be extended to use OpenRouter as a provider fallback
+## Hosted Services
 
-### Data side
+### Azure backend
 
-- Supabase/Postgres stores auth and study data
-- `participants`, `redeem_codes`, `refresh_tokens`, and `request_logs` are the active tables
-- thumbs feedback is stored directly in `request_logs.feedback_reaction`
+- App Service name: `simpleDocs`
+- Hosted backend base URL: `https://simpledocs-e3ahgecnbaf2dcfu.centralindia-01.azurewebsites.net`
+- Health endpoint: `https://simpledocs-e3ahgecnbaf2dcfu.centralindia-01.azurewebsites.net/api/health`
+- WebSocket endpoint: `wss://simpledocs-e3ahgecnbaf2dcfu.centralindia-01.azurewebsites.net/ws/stream`
 
-## What Is Already Implemented
+### Database
 
-### Core product
+Hosted Postgres is provided through Supabase.
 
-- hotkey-triggered native capture flow
-- overlay streaming response flow
-- compact overlay-oriented explanation style
-- response feedback with thumbs up / thumbs down
+Active deployment tables:
 
-### Auth and session
+- `participants`
+- `redeem_codes`
+- `refresh_tokens`
+- `request_logs`
 
-- redeem-code login
-- refresh-token flow
-- logout flow
-- Windows secure token storage
-- WebSocket auth at handshake
-- protected backend routes
+## Client Runtime Modes
 
-### Hosted data path
+The client can run in two main modes.
 
-- Supabase/Postgres connectivity
-- request log table path
-- request id flow
-- async post-response request logging
-- redeem codes seeded in hosted DB
-- feedback reaction saved in `request_logs`
+### Development mode
 
-### Packaging and support
+Development mode points to localhost.
 
-- client publish script
-- tester bundle script
-- support docs and tester docs
-- final direct-exe zip package
+Expected values:
 
-### Hosting
+- API: `http://localhost:3000`
+- WebSocket: `ws://localhost:3000`
+- auth can be disabled locally
 
-- Azure App Service backend deployment workflow exists
-- Azure backend is live
-- `/api/health` works from the hosted URL
-- hosted redeem / refresh / logout flow works
-- hosted authenticated WebSocket explanation works
-- hosted request logging works
-- client staging/production config points to the Azure backend
+This mode is only for local development and debugging.
 
-## What Still Needs To Be Done
+### Production mode
 
-### Must do before broader external pilot
+Production mode points to the Azure backend.
 
-1. Validate the latest packaged zip on one clean Windows machine.
-2. Run a short internal pilot with real users across the main target apps.
-3. Confirm support handling for tester issues and log collection.
-4. Rotate any temporary development keys before sending the package to more users.
+Expected values:
 
-### Strongly recommended before 10 to 30 external users
+- API: `https://simpledocs-e3ahgecnbaf2dcfu.centralindia-01.azurewebsites.net`
+- WebSocket: `wss://simpledocs-e3ahgecnbaf2dcfu.centralindia-01.azurewebsites.net`
+- auth is enabled
 
-1. Validate on multiple Windows versions and DPI settings.
-2. Validate on VS Code, browser, Windows Terminal, and classic terminal.
-3. Freeze one package version and one model configuration for the study period.
-4. Track redeem-code issuance clearly per tester.
+Important:
 
-## Deployment Phases
+If the app starts in `Development`, it will still try `localhost` and the hosted deployment will not be tested correctly.
 
-### Phase 1: Completed foundation
+## Auth Behavior In Production
 
-- backend auth implemented
-- hosted Supabase configured
-- schema applied
-- Azure backend deployed
-- production client config points to hosted backend
-- tester package build works
+Production requires redeem-code login.
 
-### Phase 2: Completed hosted validation
+Current auth flow:
 
-- hosted health endpoint works
-- hosted redeem-code login works
-- hosted refresh/logout works
-- hosted authenticated WebSocket request works
-- hosted DB logging works
-- feedback logging works
+1. User opens the client
+2. Login window asks for redeem code
+3. Client calls `POST /auth/redeem-code`
+4. Backend returns `access_token` and `refresh_token`
+5. Client stores them locally with Windows DPAPI
+6. Client uses the access token for backend calls
+7. Client refreshes the session silently when needed
 
-### Phase 3: Current internal pilot step
+The user should stay signed in for around 30 days unless the session is revoked or unrecoverable.
 
-- package the latest build
-- validate on at least one clean Windows machine
-- issue real redeem codes
-- collect internal pilot feedback
+## WebSocket Auth Behavior
 
-### Phase 4: External pilot
+Hosted `/ws/stream` is protected.
 
-- 10 to 30 users
-- fixed build and fixed model configuration
-- manual redeem-code issuance
-- regular review of `request_logs` and `feedback_reaction`
+The client now sends the access token in both supported ways:
 
-## Current Risks
+- `Authorization: Bearer <token>` request header
+- `?access_token=<token>` query string
 
-### Technical risks
+This is intentional because hosted WebSocket auth can be more reliable when the token is also available in the connection URL.
 
-- packaged build still needs one clean-machine verification outside the development machine
-- capture quality still needs broader validation across real editor/browser/terminal combinations
+## Tester Delivery Model
 
-### Operational risks
+The tester receives a portable Windows package.
 
-- temporary development API keys should be rotated
-- support process must be consistent before broad rollout
-- testers need clear privacy guidance about selected text and surrounding context
+Current delivery model:
 
-## Recommended Immediate Order
+- unzip package
+- open the extracted app folder
+- run `CodeExplainer.exe`
+- sign in once with redeem code
+- use the app normally after that
 
-1. validate the current package on one clean Windows machine
-2. start a small internal pilot
-3. monitor logs and feedback reactions
-4. fix high-signal pilot issues
-5. expand to external testers
+The tester does not need to run PowerShell or command-line startup commands for normal usage.
 
-## Definition Of Pilot Ready
+## Auto-Start Behavior
 
-The system is pilot ready when all of these are true:
+The client supports Windows auto-start through the Registry `Run` entry.
 
-- packaged build launches cleanly
-- redeem-code login works against the hosted backend
-- session restores after restart
-- authenticated WebSocket explain request works
-- final request log row is written to hosted DB
-- thumbs feedback works
-- no critical capture or overlay regressions are present
-- one clean-machine package verification has been completed
+Current behavior:
+
+- enabled by default
+- can be toggled from the tray menu
+- app starts hidden and waits for use
+
+## Production Config Files
+
+Production client config is currently defined in:
+
+- [appsettings.Production.json](</d:/PROJECTS/Startup/prototype4 - Copy (2)/client/appsettings.Production.json>)
+- [appsettings.Staging.json](</d:/PROJECTS/Startup/prototype4 - Copy (2)/client/appsettings.Staging.json>)
+
+The default development config is:
+
+- [appsettings.json](</d:/PROJECTS/Startup/prototype4 - Copy (2)/client/appsettings.json>)
+
+If the running app is using `localhost`, it is not in production mode.
+
+## Azure Checks
+
+### What Azure Overview tells us
+
+Azure Overview confirms:
+
+- app exists
+- app service is running
+- default domain
+- runtime stack
+- health check summary
+
+This is useful but not enough to prove the full app flow works.
+
+### What Azure Activity Log tells us
+
+Azure Activity Log only shows Azure management events.
+
+Examples:
+
+- restart
+- config change
+- deployment
+- delete
+
+It does not show application-level request failures or WebSocket handshake failures.
+
+### What to use for runtime problems
+
+For runtime troubleshooting, use:
+
+- Azure `Overview`
+- Azure `Log stream`
+- `https://.../api/health`
+- local client log
+
+## Local Runtime Logs
+
+Main runtime log files:
+
+- [client_live.log](</d:/PROJECTS/Startup/prototype4 - Copy (2)/runlogs/client_live.log>)
+- [backend_live.log](</d:/PROJECTS/Startup/prototype4 - Copy (2)/runlogs/backend_live.log>)
+- [backend_live.err.log](</d:/PROJECTS/Startup/prototype4 - Copy (2)/runlogs/backend_live.err.log>)
+
+These are the first files to inspect during deployment testing.
+
+## Current Known Deployment Lessons
+
+These are the important operational lessons learned during hosted testing.
+
+### 1. Azure can be healthy while the client still fails
+
+If the client shows a connection popup, that does not automatically mean Azure is down.
+
+The backend can still be healthy while:
+
+- the client is in the wrong environment mode
+- the client has no valid token
+- the redeem code has already been used
+- the WebSocket auth handshake is rejected
+
+### 2. Hotkey will not register if startup auth is not completed
+
+If production login fails, startup aborts before hotkey registration.
+
+That means:
+
+- no tray-ready state
+- no `Ctrl+Shift+Space`
+- no normal explain flow
+
+### 3. Used redeem codes cannot be reused for first-time login
+
+If a code is already marked used, startup login will fail.
+
+In that case the tester needs:
+
+- a fresh unused redeem code
+- or a still-valid stored session from a previous successful sign-in
+
+## Current Pilot-Ready Checklist
+
+The deployment is considered pilot-ready when all of these are true:
+
+- Azure health endpoint returns `200`
+- production client launches with hosted URL, not localhost
+- redeem-code login succeeds
+- hotkey registers after login
+- hosted WebSocket explanation succeeds
+- request log row is written to Supabase
+- feedback reaction works
+- portable tester package works on a clean Windows machine
+
+## Manual Production Verification
+
+Recommended hosted verification sequence:
+
+1. Launch the client in production mode
+2. Confirm client log shows hosted Azure URL
+3. Enter a fresh redeem code
+4. Confirm hotkey registration appears in log
+5. Select text and trigger explanation
+6. Confirm WebSocket connect line uses `wss://...azurewebsites.net/ws/stream`
+7. Confirm no connection error popup appears
+8. Confirm request row is stored in Supabase
+
+## Current Remaining Deployment Risks
+
+The remaining deployment risks are operational, not architectural.
+
+Main ones:
+
+- tester may accidentally run a development-mode build
+- tester may try an already-used redeem code
+- client packaging still needs repeated clean-machine validation
+- production testing should be repeated after every package refresh
+
+## Recommended Immediate Rule
+
+For hosted testing and tester delivery, always use:
+
+- production config
+- hosted Azure backend
+- fresh redeem code
+- runtime log verification after first launch
+
+That is the safest deployment path for the current system.
