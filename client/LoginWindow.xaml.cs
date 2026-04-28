@@ -8,14 +8,7 @@ namespace CodeExplainer
         public LoginWindow()
         {
             InitializeComponent();
-            Loaded += (_, _) =>
-            {
-                CodeTextBox.Focus();
-                UpdatePlaceholder();
-            };
         }
-
-        public string RedeemCode => CodeTextBox.Text.Trim();
 
         public void SetError(string message)
         {
@@ -30,17 +23,10 @@ namespace CodeExplainer
             BusyText.Visibility = isBusy ? Visibility.Visible : Visibility.Collapsed;
             SignInButton.IsEnabled = !isBusy;
             CancelButton.IsEnabled = !isBusy;
-            CodeTextBox.IsEnabled = !isBusy;
         }
 
         private void SignInButton_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(RedeemCode))
-            {
-                SetError("Enter the redeem code you received.");
-                return;
-            }
-
             DialogResult = true;
         }
 
@@ -60,29 +46,6 @@ namespace CodeExplainer
             {
                 DragMove();
             }
-        }
-
-        private void CodeTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-        {
-            if (ErrorText.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(CodeTextBox.Text))
-            {
-                SetError(string.Empty);
-            }
-
-            UpdatePlaceholder();
-        }
-
-        private void UpdatePlaceholder()
-        {
-            PlaceholderText.Visibility = string.IsNullOrWhiteSpace(CodeTextBox.Text)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        }
-
-        private void CodeInputHost_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            CodeTextBox.Focus();
-            CodeTextBox.Select(CodeTextBox.Text.Length, 0);
         }
     }
 }

@@ -236,7 +236,7 @@
                                 BorderBrush="#2AFFFFFF"
                                 BorderThickness="1"
                                 CornerRadius="999">
-                            <TextBlock Text="One-time access"
+                            <TextBlock Text="Google sign-in"
                                        FontSize="11"
                                        FontWeight="SemiBold"
                                        Foreground="#D9E9FF" />
@@ -244,7 +244,7 @@
 
                         <TextBlock Grid.Row="1"
                                    Margin="0,18,0,0"
-                                   Text="Enter your access code"
+                                   Text="Continue with Google"
                                    FontSize="26"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextPrimaryBrush}" />
@@ -252,83 +252,63 @@
                         <TextBlock Grid.Row="2"
                                    Margin="0,10,0,0"
                                    MaxWidth="390"
-                                   Text="Sign in once and the app will keep you authenticated for 30 days on this device."
+                                   Text="A browser window will open so you can sign in with your Google account. simpleDocs will keep this device signed in for 30 days."
                                    TextWrapping="Wrap"
                                    FontSize="14"
                                    Foreground="{StaticResource TextMutedBrush}" />
 
                         <TextBlock Grid.Row="3"
                                    Margin="2,18,0,0"
-                                   Text="Access code"
+                                   Text="What happens next"
                                    FontSize="12"
                                    FontWeight="SemiBold"
                                    Foreground="#D9E9FF" />
 
                         <Border Grid.Row="4"
                                 Margin="0,10,0,0"
-                                Padding="0"
+                                Padding="18"
                                 Background="{StaticResource InputPanelBrush}"
                                 BorderBrush="{StaticResource InputStrokeBrush}"
                                 BorderThickness="2"
-                                CornerRadius="18"
-                                Cursor="IBeam">
-                            <Grid Height="66"
-                                  MouseLeftButtonDown="CodeInputHost_MouseLeftButtonDown"
-                                  Cursor="IBeam">
+                                CornerRadius="18">
+                            <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="62" />
+                                    <ColumnDefinition Width="56" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
 
-                                <Border Margin="10"
-                                        CornerRadius="13"
+                                <Border Width="42"
+                                        Height="42"
+                                        VerticalAlignment="Top"
+                                        CornerRadius="21"
                                         Background="#E8EEF8"
                                         BorderBrush="#D4DEED"
                                         BorderThickness="1">
                                     <TextBlock HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
-                                               Text="ID"
-                                               FontSize="14"
+                                               Text="G"
+                                               FontSize="20"
                                                FontWeight="SemiBold"
                                                Foreground="#43526A" />
                                 </Border>
 
-                                <Grid Grid.Column="1"
-                                      Margin="0,0,16,0">
-                                    <TextBox x:Name="CodeTextBox"
-                                             Height="66"
-                                             Padding="0,0,0,0"
-                                             FontSize="28"
-                                             FontWeight="SemiBold"
-                                             Background="Transparent"
-                                             Foreground="{StaticResource InputTextBrush}"
-                                             BorderThickness="0"
-                                             CaretBrush="#9AC6FF"
-                                             VerticalContentAlignment="Center"
-                                             HorizontalContentAlignment="Left"
-                                             Cursor="IBeam"
-                                             TextChanged="CodeTextBox_TextChanged" />
-
-                                    <TextBlock x:Name="PlaceholderText"
-                                               Margin="0,0,0,0"
-                                               VerticalAlignment="Center"
-                                               Text="Type your code here"
-                                               FontSize="18"
-                                               Foreground="{StaticResource InputHintBrush}"
-                                               IsHitTestVisible="False" />
-                                </Grid>
+                                <StackPanel Grid.Column="1"
+                                            Margin="10,0,0,0">
+                                    <TextBlock Text="We open Google in your default browser and wait for the sign-in callback on this device."
+                                               TextWrapping="Wrap"
+                                               FontSize="14"
+                                               Foreground="{StaticResource InputTextBrush}" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               Text="No redeem code is needed for this flow."
+                                               FontSize="12"
+                                               Foreground="{StaticResource InputHintBrush}" />
+                                </StackPanel>
                             </Grid>
                         </Border>
 
                         <TextBlock Grid.Row="5"
                                    Margin="2,12,0,0"
-                                   Text="Click inside the white box, then paste or type the code exactly as you received it."
-                                   FontSize="12"
-                                   Foreground="{StaticResource TextMutedBrush}" />
-
-                        <TextBlock x:Name="ErrorText"
-                                   Grid.Row="6"
-                                   Margin="2,12,0,0"
+                                   x:Name="ErrorText"
                                    TextWrapping="Wrap"
                                    FontSize="13"
                                    Foreground="#FFB6A8"
@@ -349,7 +329,7 @@
                                    FontWeight="SemiBold"
                                    Foreground="#D8E6FF"
                                    Visibility="Collapsed"
-                                   Text="Signing in..." />
+                                   Text="Opening Google sign-in..." />
 
                         <Button x:Name="CancelButton"
                                 Grid.Column="1"
@@ -362,11 +342,11 @@
 
                         <Button x:Name="SignInButton"
                                 Grid.Column="2"
-                                Width="132"
+                                Width="172"
                                 Height="44"
                                 Margin="12,0,0,0"
                                 Click="SignInButton_Click"
-                                Content="Continue"
+                                Content="Continue with Google"
                                 Style="{StaticResource PrimaryButtonStyle}" />
                     </Grid>
                 </Grid>

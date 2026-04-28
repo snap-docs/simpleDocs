@@ -429,20 +429,25 @@ namespace CodeExplainer
                         return false;
                     }
 
-                    await _authSessionManager.RedeemCodeAsync(loginWindow.RedeemCode);
-                    RuntimeLog.Info("Auth", "Redeem code accepted.");
+                    await _authSessionManager.SignInWithGoogleAsync();
+                    RuntimeLog.Info("Auth", "Google sign-in completed.");
                     UpdateTrayAuthStatus();
                     return true;
                 }
                 catch (AuthApiException ex)
                 {
-                    RuntimeLog.Warn("Auth", $"Redeem code failed: {ex.Message}");
+                    RuntimeLog.Warn("Auth", $"Google sign-in exchange failed: {ex.Message}");
+                    reason = ex.Message;
+                }
+                catch (GoogleSignInException ex)
+                {
+                    RuntimeLog.Warn("Auth", $"Google sign-in canceled or failed locally: {ex.Message}");
                     reason = ex.Message;
                 }
                 catch (Exception ex)
                 {
-                    RuntimeLog.Error("Auth", $"Redeem code request failed: {ex.Message}");
-                    reason = "Unable to reach the backend. Check your connection and try again.";
+                    RuntimeLog.Error("Auth", $"Google sign-in request failed: {ex.Message}");
+                    reason = "Unable to complete Google sign-in. Check your connection and try again.";
                 }
             }
         }
@@ -478,7 +483,7 @@ namespace CodeExplainer
             await _authSessionManager.LogoutAsync();
             UpdateTrayAuthStatus();
             _overlayWindow?.ShowMessage("You have been signed out.", "signed out");
-            bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Enter a redeem code to sign in again.");
+            bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in with Google to continue.");
             if (!authenticated)
             {
                 _trayIcon?.ShowBalloonTip(3000, "simpleDocs", "You are currently signed out.", ToolTipIcon.Warning);

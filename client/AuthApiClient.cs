@@ -26,6 +26,16 @@ namespace CodeExplainer
             });
         }
 
+        public Task<TokenBundle> ExchangeGoogleCodeAsync(string code, string codeVerifier, string redirectUri)
+        {
+            return PostForTokensAsync("auth/google/exchange", new
+            {
+                code,
+                code_verifier = codeVerifier,
+                redirect_uri = redirectUri
+            });
+        }
+
         public async Task<string> RefreshAsync(string refreshToken)
         {
             TokenBundle response = await PostForTokensAsync("auth/refresh", new

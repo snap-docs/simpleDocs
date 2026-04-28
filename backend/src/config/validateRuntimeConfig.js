@@ -24,6 +24,7 @@ export function validateRuntimeConfig(environmentName = 'development') {
   const explicitAccessTokenSecret = process.env.ACCESS_TOKEN_SECRET;
   const fallbackJwtSecret = process.env.SUPABASE_JWT_SECRET;
   const accessTokenSecret = explicitAccessTokenSecret || fallbackJwtSecret;
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
 
   if (process.env.SKIP_AUTH === 'true') {
     warnings.push('SKIP_AUTH=true is enabled. Auth is bypassed for protected backend routes.');
@@ -40,8 +41,12 @@ export function validateRuntimeConfig(environmentName = 'development') {
     warnings.push('ACCESS_TOKEN_SECRET is not set explicitly. The backend is falling back to SUPABASE_JWT_SECRET.');
   }
 
+  if (isProtectedMode && (isBlank(googleClientId) || isPlaceholder(googleClientId))) {
+    warnings.push('GOOGLE_CLIENT_ID is missing. Google sign-in cannot complete in protected auth mode.');
+  }
+
   if (isProtectedMode && (isBlank(serviceRoleKey) || isPlaceholder(serviceRoleKey))) {
-    warnings.push('SUPABASE_SERVICE_ROLE_KEY is missing. Redeem-code auth and request logging may fail against hosted DB policies.');
+    warnings.push('SUPABASE_SERVICE_ROLE_KEY is missing. Google sign-in, refresh-token storage, and request logging may fail against hosted DB policies.');
   }
 
   if (!serviceRoleKey && anonKey) {

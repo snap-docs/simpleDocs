@@ -11,6 +11,8 @@ namespace CodeExplainer
         public string WsBaseUrl { get; init; } = "ws://localhost:3000";
         public bool AuthEnabled { get; init; } = true;
         public int AuthRefreshSkewSeconds { get; init; } = 60;
+        public string GoogleClientId { get; init; } = string.Empty;
+        public int GoogleRedirectPort { get; init; } = 48152;
         public int WebSocketConnectTimeoutSeconds { get; init; } = 30;
         public int WebSocketRetryCount { get; init; } = 3;
         public int WebSocketRetryBaseDelayMs { get; init; } = 500;
@@ -43,6 +45,8 @@ namespace CodeExplainer
                 WsBaseUrl = TrimTrailingSlash(wsBaseUrl),
                 AuthEnabled = ParseBoolOverride("CODE_EXPLAINER_AUTH_ENABLED", settings.Auth.Enabled, true),
                 AuthRefreshSkewSeconds = ParseIntOverride("CODE_EXPLAINER_AUTH_REFRESH_SKEW_SECONDS", settings.Auth.RefreshSkewSeconds, 60),
+                GoogleClientId = GetEnvOverride("CODE_EXPLAINER_GOOGLE_CLIENT_ID") ?? settings.Auth.GoogleClientId ?? string.Empty,
+                GoogleRedirectPort = ParseIntOverride("CODE_EXPLAINER_GOOGLE_REDIRECT_PORT", settings.Auth.GoogleRedirectPort, 48152),
                 WebSocketConnectTimeoutSeconds = ParseIntOverride("CODE_EXPLAINER_WS_CONNECT_TIMEOUT_SECONDS", settings.Streaming.ConnectTimeoutSeconds, 30),
                 WebSocketRetryCount = ParseIntOverride("CODE_EXPLAINER_WS_RETRY_COUNT", settings.Streaming.RetryCount, 3),
                 WebSocketRetryBaseDelayMs = ParseIntOverride("CODE_EXPLAINER_WS_RETRY_BASE_DELAY_MS", settings.Streaming.RetryBaseDelayMs, 500)
@@ -82,6 +86,8 @@ namespace CodeExplainer
             target.Backend.WsBaseUrl = source.Backend.WsBaseUrl ?? target.Backend.WsBaseUrl;
             target.Auth.Enabled = source.Auth.Enabled ?? target.Auth.Enabled;
             target.Auth.RefreshSkewSeconds = source.Auth.RefreshSkewSeconds ?? target.Auth.RefreshSkewSeconds;
+            target.Auth.GoogleClientId = source.Auth.GoogleClientId ?? target.Auth.GoogleClientId;
+            target.Auth.GoogleRedirectPort = source.Auth.GoogleRedirectPort ?? target.Auth.GoogleRedirectPort;
             target.Streaming.ConnectTimeoutSeconds = source.Streaming.ConnectTimeoutSeconds ?? target.Streaming.ConnectTimeoutSeconds;
             target.Streaming.RetryCount = source.Streaming.RetryCount ?? target.Streaming.RetryCount;
             target.Streaming.RetryBaseDelayMs = source.Streaming.RetryBaseDelayMs ?? target.Streaming.RetryBaseDelayMs;
@@ -176,6 +182,8 @@ namespace CodeExplainer
         {
             public bool? Enabled { get; set; }
             public int? RefreshSkewSeconds { get; set; }
+            public string? GoogleClientId { get; set; }
+            public int? GoogleRedirectPort { get; set; }
         }
 
         private sealed class StreamingSection

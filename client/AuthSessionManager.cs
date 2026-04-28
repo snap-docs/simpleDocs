@@ -12,6 +12,7 @@ namespace CodeExplainer
     {
         private readonly ClientConfig _config;
         private readonly AuthApiClient _authApiClient;
+        private readonly GoogleSignInCoordinator _googleSignInCoordinator;
         private readonly SecureTokenStore _tokenStore;
         private readonly SemaphoreSlim _refreshLock = new(1, 1);
         private StoredSessionState? _state;
@@ -20,6 +21,7 @@ namespace CodeExplainer
         {
             _config = config;
             _authApiClient = new AuthApiClient(config);
+            _googleSignInCoordinator = new GoogleSignInCoordinator(config);
             _tokenStore = new SecureTokenStore();
         }
 
@@ -57,6 +59,16 @@ namespace CodeExplainer
         public async Task RedeemCodeAsync(string code)
         {
             TokenBundle tokens = await _authApiClient.RedeemCodeAsync(code);
+            Persist(tokens.AccessToken, tokens.RefreshToken);
+        }
+
+        public async Task SignInWithGoogleAsync()
+        {
+            GoogleAuthorizationResult authorization = await _googleSignInCoordinator.AuthorizeAsync();
+            TokenBundle tokens = await _authApiClient.ExchangeGoogleCodeAsync(
+                authorization.AuthorizationCode,
+                authorization.CodeVerifier,
+                authorization.RedirectUri);
             Persist(tokens.AccessToken, tokens.RefreshToken);
         }
 

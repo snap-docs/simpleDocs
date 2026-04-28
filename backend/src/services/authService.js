@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logger } from '../utils/logger.js';
 
 const DEFAULT_REFRESH_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
 let adminClient = null;
 
@@ -25,12 +26,29 @@ function getAuthConfig() {
     participantsTable: process.env.AUTH_PARTICIPANTS_TABLE || 'participants',
     participantsIdColumn: process.env.AUTH_PARTICIPANTS_ID_COLUMN || 'id',
     participantsCodeColumn: process.env.AUTH_PARTICIPANTS_CODE_COLUMN || '',
+    participantsProviderColumn: process.env.AUTH_PARTICIPANTS_PROVIDER_COLUMN || 'auth_provider',
+    participantsGoogleSubColumn: process.env.AUTH_PARTICIPANTS_GOOGLE_SUB_COLUMN || 'google_sub',
+    participantsEmailColumn: process.env.AUTH_PARTICIPANTS_EMAIL_COLUMN || 'email',
+    participantsEmailVerifiedColumn: process.env.AUTH_PARTICIPANTS_EMAIL_VERIFIED_COLUMN || 'email_verified',
+    participantsDisplayNameColumn: process.env.AUTH_PARTICIPANTS_DISPLAY_NAME_COLUMN || 'display_name',
+    participantsGivenNameColumn: process.env.AUTH_PARTICIPANTS_GIVEN_NAME_COLUMN || 'given_name',
+    participantsFamilyNameColumn: process.env.AUTH_PARTICIPANTS_FAMILY_NAME_COLUMN || 'family_name',
+    participantsAvatarUrlColumn: process.env.AUTH_PARTICIPANTS_AVATAR_URL_COLUMN || 'avatar_url',
+    participantsLastLoginAtColumn: process.env.AUTH_PARTICIPANTS_LAST_LOGIN_AT_COLUMN || 'last_login_at',
     refreshTokensTable: process.env.AUTH_REFRESH_TOKENS_TABLE || 'refresh_tokens',
     refreshTokenHashColumn: process.env.AUTH_REFRESH_TOKENS_HASH_COLUMN || 'token_hash',
     refreshParticipantIdColumn: process.env.AUTH_REFRESH_TOKENS_PARTICIPANT_ID_COLUMN || 'participant_id',
     refreshExpiresAtColumn: process.env.AUTH_REFRESH_TOKENS_EXPIRES_AT_COLUMN || 'expires_at',
     refreshRevokedAtColumn: process.env.AUTH_REFRESH_TOKENS_REVOKED_AT_COLUMN || 'revoked_at',
     refreshCreatedAtColumn: process.env.AUTH_REFRESH_TOKENS_CREATED_AT_COLUMN || 'created_at'
+  };
+}
+
+function getGoogleAuthConfig() {
+  return {
+    clientId: (process.env.GOOGLE_CLIENT_ID || '').trim(),
+    clientSecret: (process.env.GOOGLE_CLIENT_SECRET || '').trim(),
+    allowedEmailDomain: (process.env.GOOGLE_ALLOWED_EMAIL_DOMAIN || '').trim().toLowerCase()
   };
 }
 
@@ -94,6 +112,15 @@ function requireAccessTokenSecret() {
   return secret;
 }
 
+function requireGoogleClientId() {
+  const config = getGoogleAuthConfig();
+  if (!config.clientId || config.clientId === 'your_google_oauth_client_id_here') {
+    throw new AuthError(500, 'Google sign-in is not configured');
+  }
+
+  return config;
+}
+
 function createAccessToken(participantId) {
   const secret = requireAccessTokenSecret();
   return jwt.sign(
@@ -122,6 +149,14 @@ function normalizeCode(code) {
 
 function normalizeRefreshToken(refreshToken) {
   return typeof refreshToken === 'string' ? refreshToken.trim() : '';
+}
+
+function normalizeRedirectUri(redirectUri) {
+  return typeof redirectUri === 'string' ? redirectUri.trim() : '';
+}
+
+function normalizeBoolean(value) {
+  return value === true || value === 'true' || value === 1 || value === '1';
 }
 
 function isCodeUsed(codeRow, config) {
@@ -176,6 +211,94 @@ async function createParticipant(client, code, config) {
   }
 
   return result.data?.[config.participantsIdColumn];
+}
+
+function assignIfPresent(payload, key, value) {
+  if (!key) {
+    return;
+  }
+
+  if (value === null || value === undefined) {
+    payload[key] = null;
+    return;
+  }
+
+  if (typeof value === 'string') {
+    payload[key] = value.trim();
+    return;
+  }
+
+  payload[key] = value;
+}
+
+function buildGoogleParticipantPayload(identity, config) {
+  const payload = {};
+
+  assignIfPresent(payload, config.participantsProviderColumn, 'google');
+  assignIfPresent(payload, config.participantsGoogleSubColumn, identity.googleSub);
+  assignIfPresent(payload, config.participantsEmailColumn, identity.email || null);
+  assignIfPresent(payload, config.participantsEmailVerifiedColumn, identity.emailVerified);
+  assignIfPresent(payload, config.participantsDisplayNameColumn, identity.displayName || null);
+  assignIfPresent(payload, config.participantsGivenNameColumn, identity.givenName || null);
+  assignIfPresent(payload, config.participantsFamilyNameColumn, identity.familyName || null);
+  assignIfPresent(payload, config.participantsAvatarUrlColumn, identity.avatarUrl || null);
+  assignIfPresent(payload, config.participantsLastLoginAtColumn, new Date().toISOString());
+
+  return payload;
+}
+
+async function loadParticipantByGoogleSub(client, googleSub, config) {
+  const { data, error } = await client
+    .from(config.participantsTable)
+    .select(config.participantsIdColumn)
+    .eq(config.participantsGoogleSubColumn, googleSub)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new AuthError(500, `Failed to read Google participant: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function createGoogleParticipant(client, identity, config) {
+  const payload = buildGoogleParticipantPayload(identity, config);
+  const { data, error } = await client
+    .from(config.participantsTable)
+    .insert(payload)
+    .select(config.participantsIdColumn)
+    .single();
+
+  if (error) {
+    throw new AuthError(500, `Failed to create Google participant: ${error.message}`);
+  }
+
+  return data?.[config.participantsIdColumn];
+}
+
+async function updateGoogleParticipant(client, participantId, identity, config) {
+  const payload = buildGoogleParticipantPayload(identity, config);
+
+  const { error } = await client
+    .from(config.participantsTable)
+    .update(payload)
+    .eq(config.participantsIdColumn, participantId);
+
+  if (error) {
+    throw new AuthError(500, `Failed to update Google participant: ${error.message}`);
+  }
+}
+
+async function resolveGoogleParticipantId(client, identity, config) {
+  const participantRow = await loadParticipantByGoogleSub(client, identity.googleSub, config);
+  if (participantRow?.[config.participantsIdColumn]) {
+    const participantId = participantRow[config.participantsIdColumn];
+    await updateGoogleParticipant(client, participantId, identity, config);
+    return participantId;
+  }
+
+  return await createGoogleParticipant(client, identity, config);
 }
 
 async function markRedeemCodeUsed(client, code, participantId, config) {
@@ -269,6 +392,121 @@ function ensureActiveRefreshToken(tokenRow, config) {
   }
 }
 
+async function exchangeGoogleCodeForIdentity(code, codeVerifier, redirectUri) {
+  const normalizedCode = normalizeCode(code);
+  const normalizedCodeVerifier = normalizeRefreshToken(codeVerifier);
+  const normalizedRedirectUri = normalizeRedirectUri(redirectUri);
+  const googleConfig = requireGoogleClientId();
+
+  if (!normalizedCode) {
+    throw new AuthError(400, 'code is required');
+  }
+
+  if (!normalizedCodeVerifier) {
+    throw new AuthError(400, 'code_verifier is required');
+  }
+
+  if (!normalizedRedirectUri) {
+    throw new AuthError(400, 'redirect_uri is required');
+  }
+
+  const requestBody = new URLSearchParams({
+    client_id: googleConfig.clientId,
+    code: normalizedCode,
+    code_verifier: normalizedCodeVerifier,
+    grant_type: 'authorization_code',
+    redirect_uri: normalizedRedirectUri
+  });
+
+  if (googleConfig.clientSecret) {
+    requestBody.set('client_secret', googleConfig.clientSecret);
+  }
+
+  let response;
+  try {
+    response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: requestBody.toString()
+    });
+  } catch (error) {
+    throw new AuthError(502, `Google token exchange failed: ${error.message}`);
+  }
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    const detail = typeof body?.error_description === 'string'
+      ? body.error_description
+      : typeof body?.error === 'string'
+        ? body.error
+        : 'Google sign-in was rejected';
+    throw new AuthError(401, detail);
+  }
+
+  const idToken = typeof body?.id_token === 'string' ? body.id_token.trim() : '';
+  if (!idToken) {
+    throw new AuthError(401, 'Google sign-in did not return an identity token');
+  }
+
+  const claims = jwt.decode(idToken);
+  if (!claims || typeof claims !== 'object' || Array.isArray(claims)) {
+    throw new AuthError(401, 'Google sign-in returned an unreadable identity token');
+  }
+
+  const audience = claims.aud;
+  const audienceMatches = Array.isArray(audience)
+    ? audience.some((entry) => String(entry || '').trim() === googleConfig.clientId)
+    : String(audience || '').trim() === googleConfig.clientId;
+
+  if (!audienceMatches) {
+    throw new AuthError(401, 'Google sign-in audience did not match this application');
+  }
+
+  const issuer = String(claims.iss || '').trim();
+  if (issuer !== 'accounts.google.com' && issuer !== 'https://accounts.google.com') {
+    throw new AuthError(401, 'Google sign-in issuer was invalid');
+  }
+
+  const subject = String(claims.sub || '').trim();
+  if (!subject) {
+    throw new AuthError(401, 'Google sign-in did not include a user id');
+  }
+
+  const expRaw = claims.exp;
+  const expSeconds = typeof expRaw === 'number' ? expRaw : Number.parseInt(String(expRaw || ''), 10);
+  if (!Number.isFinite(expSeconds) || expSeconds * 1000 <= Date.now()) {
+    throw new AuthError(401, 'Google sign-in token has expired');
+  }
+
+  const email = typeof claims.email === 'string' ? claims.email.trim() : '';
+  const emailVerified = normalizeBoolean(claims.email_verified);
+  if (googleConfig.allowedEmailDomain) {
+    const normalizedEmail = email.toLowerCase();
+    const allowedSuffix = `@${googleConfig.allowedEmailDomain}`;
+    if (!normalizedEmail.endsWith(allowedSuffix) || !emailVerified) {
+      throw new AuthError(403, 'This Google account is not allowed for this environment');
+    }
+  }
+
+  return {
+    googleSub: subject,
+    email,
+    emailVerified,
+    displayName: typeof claims.name === 'string' ? claims.name.trim() : '',
+    givenName: typeof claims.given_name === 'string' ? claims.given_name.trim() : '',
+    familyName: typeof claims.family_name === 'string' ? claims.family_name.trim() : '',
+    avatarUrl: typeof claims.picture === 'string' ? claims.picture.trim() : ''
+  };
+}
+
 export function authenticateRequest(c, { allowQueryToken = false } = {}) {
   if (process.env.SKIP_AUTH === 'true') {
     return {
@@ -358,6 +596,23 @@ export async function redeemCode(code) {
   }
 
   await markRedeemCodeUsed(client, normalizedCode, participantId, config);
+
+  const refreshToken = createRefreshTokenValue();
+  await storeRefreshToken(client, participantId, refreshToken, config);
+
+  return {
+    access_token: createAccessToken(participantId),
+    refresh_token: refreshToken
+  };
+}
+
+export async function exchangeGoogleAuthorizationCode(code, codeVerifier, redirectUri) {
+  requireAccessTokenSecret();
+
+  const client = requireAdminClient();
+  const config = getAuthConfig();
+  const identity = await exchangeGoogleCodeForIdentity(code, codeVerifier, redirectUri);
+  const participantId = await resolveGoogleParticipantId(client, identity, config);
 
   const refreshToken = createRefreshTokenValue();
   await storeRefreshToken(client, participantId, refreshToken, config);

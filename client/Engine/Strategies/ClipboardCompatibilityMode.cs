@@ -249,7 +249,7 @@ namespace CodeExplainer.Engine.Strategies
                 return null;
             }
 
-            text = CapturePipelines.RefineEditorBackgroundForExternalUse(text ?? string.Empty, selectedTextHint, 1600);
+            text = CapturePipelines.RefineEditorBackgroundForExternalUse(text ?? string.Empty, selectedTextHint, 2800);
             if (!LooksLikePlausibleEditorSelectionText(text ?? string.Empty))
             {
                 RuntimeLog.Warn("CompatClipboard", "Rejected editor background clipboard capture: captured text is not plausible.");
@@ -266,7 +266,7 @@ namespace CodeExplainer.Engine.Strategies
             return text;
         }
 
-        public async Task<string?> TryCaptureExpandedEditorBackgroundTextAsync(ActiveWindowInfo window, string? selectedTextHint, int extraLines = 14)
+        public async Task<string?> TryCaptureExpandedEditorBackgroundTextAsync(ActiveWindowInfo window, string? selectedTextHint, int extraLines = 40)
         {
             if (!Enabled)
             {
@@ -292,16 +292,16 @@ namespace CodeExplainer.Engine.Strategies
                 }
 
                 int selectedLineCount = EstimateLineCount(selectedTextHint);
-                int linesBefore = 6;
-                int linesAfter = extraLines < 6 ? 6 : (extraLines > 22 ? 22 : extraLines);
+                int linesBefore = 20;
+                int linesAfter = extraLines < 20 ? 20 : (extraLines > 60 ? 60 : extraLines);
                 int totalLines = linesBefore + selectedLineCount + linesAfter;
-                if (totalLines < 10)
+                if (totalLines < 40)
                 {
-                    totalLines = 10;
+                    totalLines = 40;
                 }
-                else if (totalLines > 32)
+                else if (totalLines > 96)
                 {
-                    totalLines = 32;
+                    totalLines = 96;
                 }
 
                 // Step 1: Collapse active selection to start, move up for context lines
@@ -342,7 +342,7 @@ namespace CodeExplainer.Engine.Strategies
                 return null;
             }
 
-            text = CapturePipelines.RefineEditorBackgroundForExternalUse(text ?? string.Empty, selectedTextHint, 1800);
+                text = CapturePipelines.RefineEditorBackgroundForExternalUse(text ?? string.Empty, selectedTextHint, 6000);
             if (!LooksLikePlausibleEditorSelectionText(text ?? string.Empty))
             {
                 RuntimeLog.Warn("CompatClipboard", "Rejected expanded editor background capture: captured text is not plausible.");
