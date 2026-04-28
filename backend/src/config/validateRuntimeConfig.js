@@ -24,6 +24,7 @@ export function validateRuntimeConfig(environmentName = 'development') {
   const explicitAccessTokenSecret = process.env.ACCESS_TOKEN_SECRET;
   const fallbackJwtSecret = process.env.SUPABASE_JWT_SECRET;
   const accessTokenSecret = explicitAccessTokenSecret || fallbackJwtSecret;
+  const explicitFlowTokenSecret = process.env.AUTH_FLOW_TOKEN_SECRET;
   const googleClientId = process.env.GOOGLE_CLIENT_ID;
 
   if (process.env.SKIP_AUTH === 'true') {
@@ -39,6 +40,10 @@ export function validateRuntimeConfig(environmentName = 'development') {
   }
   else if (isProtectedMode && (isBlank(explicitAccessTokenSecret) || isPlaceholder(explicitAccessTokenSecret))) {
     warnings.push('ACCESS_TOKEN_SECRET is not set explicitly. The backend is falling back to SUPABASE_JWT_SECRET.');
+  }
+
+  if (isProtectedMode && (isBlank(explicitFlowTokenSecret) || isPlaceholder(explicitFlowTokenSecret))) {
+    warnings.push('AUTH_FLOW_TOKEN_SECRET is not set explicitly. OAuth flow tokens are falling back to the access-token secret.');
   }
 
   if (isProtectedMode && (isBlank(googleClientId) || isPlaceholder(googleClientId))) {

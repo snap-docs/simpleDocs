@@ -82,7 +82,9 @@ async function main() {
   const explicitAccessTokenSecret = process.env.ACCESS_TOKEN_SECRET;
   const fallbackJwtSecret = process.env.SUPABASE_JWT_SECRET;
   const accessTokenSecret = explicitAccessTokenSecret || fallbackJwtSecret;
+  const flowTokenSecret = process.env.AUTH_FLOW_TOKEN_SECRET;
   const skipAuth = process.env.SKIP_AUTH === 'true';
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
 
   if (skipAuth) {
     addResult('WARN', 'auth', 'SKIP_AUTH=true is enabled in backend env');
@@ -102,6 +104,18 @@ async function main() {
     addResult('WARN', 'ACCESS_TOKEN_SECRET', 'not set explicitly; using SUPABASE_JWT_SECRET fallback');
   } else {
     addResult('OK', 'ACCESS_TOKEN_SECRET', 'configured');
+  }
+
+  if (isBlank(flowTokenSecret) || isPlaceholder(flowTokenSecret)) {
+    addResult('WARN', 'AUTH_FLOW_TOKEN_SECRET', 'not set explicitly; OAuth flow tokens fall back to ACCESS_TOKEN_SECRET');
+  } else {
+    addResult('OK', 'AUTH_FLOW_TOKEN_SECRET', 'configured');
+  }
+
+  if (isBlank(googleClientId) || isPlaceholder(googleClientId)) {
+    addResult(skipAuth ? 'WARN' : 'FAIL', 'GOOGLE_CLIENT_ID', 'missing or placeholder');
+  } else {
+    addResult('OK', 'GOOGLE_CLIENT_ID', 'configured');
   }
 
   if (isBlank(serviceRoleKey) || isPlaceholder(serviceRoleKey)) {
@@ -141,6 +155,8 @@ async function main() {
 
   await checkTable(client, process.env.AUTH_PARTICIPANTS_TABLE || 'participants');
   await checkTable(client, process.env.AUTH_CODES_TABLE || 'redeem_codes');
+  await checkTable(client, process.env.AUTH_PROVIDER_LINKS_TABLE || 'auth_provider_links');
+  await checkTable(client, process.env.AUTH_SESSIONS_TABLE || 'auth_sessions');
   await checkTable(client, process.env.AUTH_REFRESH_TOKENS_TABLE || 'refresh_tokens');
   await checkTable(client, process.env.REQUEST_LOGS_TABLE || 'request_logs');
 
