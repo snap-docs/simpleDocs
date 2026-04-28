@@ -10,20 +10,21 @@ namespace CodeExplainer
 {
     internal sealed class AuthSessionManager
     {
-        private readonly ClientConfig _config;
         private readonly AuthApiClient _authApiClient;
-        private readonly GoogleSignInCoordinator _googleSignInCoordinator;
+        private readonly BrowserAuthCoordinator _browserAuthCoordinator;
         private readonly SecureTokenStore _tokenStore;
         private readonly SemaphoreSlim _refreshLock = new(1, 1);
         private StoredSessionState? _state;
 
         public AuthSessionManager(ClientConfig config)
         {
-            _config = config;
             _authApiClient = new AuthApiClient(config);
-            _googleSignInCoordinator = new GoogleSignInCoordinator(config);
+            _browserAuthCoordinator = new BrowserAuthCoordinator(config);
             _tokenStore = new SecureTokenStore();
+            AuthRefreshSkewSeconds = config.AuthRefreshSkewSeconds;
         }
+
+        private int AuthRefreshSkewSeconds { get; }
 
         public string? CurrentParticipantId
         {
@@ -58,18 +59,61 @@ namespace CodeExplainer
 
         public async Task RedeemCodeAsync(string code)
         {
-            TokenBundle tokens = await _authApiClient.RedeemCodeAsync(code);
-            Persist(tokens.AccessToken, tokens.RefreshToken);
+            AuthenticatedSessionResponse session = await _authApiClient.RedeemCodeAsync(code);
+            Persist(session.AccessToken, session.RefreshToken);
         }
 
         public async Task SignInWithGoogleAsync()
         {
-            GoogleAuthorizationResult authorization = await _googleSignInCoordinator.AuthorizeAsync();
-            TokenBundle tokens = await _authApiClient.ExchangeGoogleCodeAsync(
+            BrowserAuthPreparationResponse preparation = await _authApiClient.PrepareGoogleLoginAsync(_browserAuthCoordinator.RedirectUri);
+            BrowserAuthorizationResult authorization = await _browserAuthCoordinator.AuthorizeAsync(preparation.AuthorizationUrl);
+            AuthenticatedSessionResponse session = await _authApiClient.CompleteGoogleLoginAsync(
                 authorization.AuthorizationCode,
-                authorization.CodeVerifier,
-                authorization.RedirectUri);
-            Persist(tokens.AccessToken, tokens.RefreshToken);
+                authorization.State,
+                preparation.FlowToken);
+            Persist(session.AccessToken, session.RefreshToken);
+        }
+
+        public async Task SignInWithEmailPasswordAsync(string email, string password)
+        {
+            AuthenticatedSessionResponse session = await _authApiClient.LoginWithEmailPasswordAsync(email, password);
+            Persist(session.AccessToken, session.RefreshToken);
+        }
+
+        public async Task RegisterWithEmailPasswordAsync(string email, string password, string displayName)
+        {
+            AuthenticatedSessionResponse session = await _authApiClient.RegisterWithEmailPasswordAsync(email, password, displayName);
+            Persist(session.AccessToken, session.RefreshToken);
+        }
+
+        public async Task<AuthStateResponse> GetCurrentAuthStateAsync()
+        {
+            string accessToken = await EnsureValidAccessTokenAsync();
+            return await _authApiClient.GetCurrentAuthStateAsync(accessToken);
+        }
+
+        public async Task LinkGoogleAsync()
+        {
+            string accessToken = await EnsureValidAccessTokenAsync();
+            BrowserAuthPreparationResponse preparation = await _authApiClient.PrepareGoogleLinkAsync(_browserAuthCoordinator.RedirectUri, accessToken);
+            BrowserAuthorizationResult authorization = await _browserAuthCoordinator.AuthorizeAsync(preparation.AuthorizationUrl);
+            await _authApiClient.CompleteGoogleLinkAsync(
+                authorization.AuthorizationCode,
+                authorization.State,
+                preparation.FlowToken,
+                accessToken);
+        }
+
+        public async Task LinkRedeemCodeAsync(string code)
+        {
+            string accessToken = await EnsureValidAccessTokenAsync();
+            await _authApiClient.LinkRedeemCodeAsync(code, accessToken);
+        }
+
+        public async Task LinkEmailPasswordAsync(string email, string password, string displayName)
+        {
+            string accessToken = await EnsureValidAccessTokenAsync();
+            await _authApiClient.LinkEmailPasswordAsync(email, password, displayName, accessToken);
         }
 
         public async Task<string> EnsureValidAccessTokenAsync()
@@ -83,15 +127,18 @@ namespace CodeExplainer
                 }
 
                 JwtTokenInfo token = ParseToken(_state.AccessToken);
-                DateTimeOffset refreshThreshold = token.ExpiresAtUtc.AddSeconds(-_config.AuthRefreshSkewSeconds);
+                DateTimeOffset refreshThreshold = token.ExpiresAtUtc.AddSeconds(-AuthRefreshSkewSeconds);
                 if (DateTimeOffset.UtcNow < refreshThreshold)
                 {
                     return token.AccessToken;
                 }
 
-                string refreshedAccessToken = await _authApiClient.RefreshAsync(_state.RefreshToken);
-                Persist(refreshedAccessToken, _state.RefreshToken);
-                return refreshedAccessToken;
+                TokenBundle refreshed = await _authApiClient.RefreshAsync(_state.RefreshToken);
+                string refreshToken = string.IsNullOrWhiteSpace(refreshed.RefreshToken)
+                    ? _state.RefreshToken
+                    : refreshed.RefreshToken;
+                Persist(refreshed.AccessToken, refreshToken);
+                return refreshed.AccessToken;
             }
             catch (AuthApiException ex) when (ex.StatusCode is 400 or 401 or 409)
             {

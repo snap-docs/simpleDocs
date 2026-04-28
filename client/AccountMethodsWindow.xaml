@@ -1,7 +1,7 @@
-<Window x:Class="CodeExplainer.LoginWindow"
+<Window x:Class="CodeExplainer.AccountMethodsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Sign In"
+        Title="Account"
         Width="660"
         Height="640"
         ResizeMode="NoResize"
@@ -82,6 +82,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
@@ -112,10 +113,10 @@
                         <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
                                    FontSize="15"
                                    FontWeight="SemiBold"
-                                   Text="simpleDocs" />
+                                   Text="simpleDocs account" />
                         <TextBlock Foreground="{StaticResource TextMutedBrush}"
                                    FontSize="11"
-                                   Text="Choose a sign-in method" />
+                                   Text="Link more sign-in methods" />
                     </StackPanel>
                 </StackPanel>
 
@@ -127,55 +128,44 @@
 
             <StackPanel Grid.Row="1"
                         Margin="0,20,0,0">
-                <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
-                           FontSize="28"
+                <TextBlock x:Name="AccountNameText"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           FontSize="24"
                            FontWeight="SemiBold"
-                           Text="Sign in to simpleDocs" />
-                <TextBlock Margin="0,10,0,0"
+                           Text="Current account" />
+                <TextBlock x:Name="AccountEmailText"
+                           Margin="0,8,0,0"
                            Foreground="{StaticResource TextMutedBrush}"
                            FontSize="14"
-                           Text="Use your redeem code, continue with Google, or sign in with email and password." />
+                           Text="Signed-in identity" />
             </StackPanel>
 
+            <Border Grid.Row="2"
+                    Margin="0,18,0,0"
+                    Padding="16"
+                    Background="{StaticResource PanelSecondaryBrush}"
+                    BorderBrush="#2B405D"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                <StackPanel>
+                    <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Text="Linked methods" />
+                    <ListBox x:Name="LinkedMethodsList"
+                             Margin="0,10,0,0"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Foreground="{StaticResource TextPrimaryBrush}" />
+                </StackPanel>
+            </Border>
+
             <Grid x:Name="FormContentGrid"
-                  Grid.Row="2"
+                  Grid.Row="3"
                   Margin="0,20,0,0">
                 <TabControl x:Name="ProviderTabs"
                             Background="Transparent"
                             BorderThickness="0">
-                    <TabItem Header="Redeem code">
-                        <Border Margin="0,14,0,0"
-                                Padding="18"
-                                Background="{StaticResource PanelBrush}"
-                                BorderBrush="#2B405D"
-                                BorderThickness="1"
-                                CornerRadius="10">
-                            <StackPanel>
-                                <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
-                                           Text="Continue with a redeem code" />
-                                <TextBlock Margin="0,8,0,0"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           FontSize="13"
-                                           Text="Existing redeem-code users can keep the same sign-in path." />
-
-                                <TextBlock Margin="0,18,0,6"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           FontSize="12"
-                                           Text="Redeem code" />
-                                <TextBox x:Name="RedeemCodeTextBox"
-                                         Style="{StaticResource FieldTextBoxStyle}" />
-
-                                <Button Margin="0,18,0,0"
-                                        HorizontalAlignment="Left"
-                                        Click="RedeemCodeContinueButton_Click"
-                                        Content="Continue with redeem code"
-                                        Style="{StaticResource PrimaryButtonStyle}" />
-                            </StackPanel>
-                        </Border>
-                    </TabItem>
-
                     <TabItem Header="Google">
                         <Border Margin="0,14,0,0"
                                 Padding="18"
@@ -187,42 +177,44 @@
                                 <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
                                            FontSize="16"
                                            FontWeight="SemiBold"
-                                           Text="Continue with Google" />
+                                           Text="Link Google" />
                                 <TextBlock Margin="0,8,0,0"
                                            Foreground="{StaticResource TextMutedBrush}"
                                            FontSize="13"
-                                           Text="simpleDocs opens your browser, completes the Google sign-in flow securely through the backend, and returns you to the desktop app." />
-
-                                <Border Margin="0,20,0,0"
-                                        Padding="16"
-                                        Background="{StaticResource PanelSecondaryBrush}"
-                                        BorderBrush="#2B405D"
-                                        BorderThickness="1"
-                                        CornerRadius="10">
-                                    <StackPanel>
-                                        <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
-                                                   FontSize="14"
-                                                   FontWeight="SemiBold"
-                                                   Text="What happens next" />
-                                        <TextBlock Margin="0,8,0,0"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="13"
-                                                   Text="1. The app opens your default browser." />
-                                        <TextBlock Margin="0,4,0,0"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="13"
-                                                   Text="2. Google signs you in and redirects back to this device." />
-                                        <TextBlock Margin="0,4,0,0"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="13"
-                                                   Text="3. simpleDocs creates the same shared session model used by every provider." />
-                                    </StackPanel>
-                                </Border>
-
+                                           Text="Add a Google sign-in method to this same account without creating a second identity." />
                                 <Button Margin="0,20,0,0"
                                         HorizontalAlignment="Left"
-                                        Click="GoogleContinueButton_Click"
-                                        Content="Continue with Google"
+                                        Click="GoogleLinkButton_Click"
+                                        Content="Link Google"
+                                        Style="{StaticResource PrimaryButtonStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </TabItem>
+
+                    <TabItem Header="Redeem code">
+                        <Border Margin="0,14,0,0"
+                                Padding="18"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="#2B405D"
+                                BorderThickness="1"
+                                CornerRadius="10">
+                            <StackPanel>
+                                <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Text="Link a redeem code" />
+
+                                <TextBlock Margin="0,16,0,6"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="12"
+                                           Text="Redeem code" />
+                                <TextBox x:Name="RedeemCodeTextBox"
+                                         Style="{StaticResource FieldTextBoxStyle}" />
+
+                                <Button Margin="0,18,0,0"
+                                        HorizontalAlignment="Left"
+                                        Click="RedeemCodeLinkButton_Click"
+                                        Content="Link redeem code"
                                         Style="{StaticResource PrimaryButtonStyle}" />
                             </StackPanel>
                         </Border>
@@ -235,80 +227,45 @@
                                 BorderBrush="#2B405D"
                                 BorderThickness="1"
                                 CornerRadius="10">
-                            <TabControl x:Name="EmailModeTabs"
-                                        Background="Transparent"
-                                        BorderThickness="0">
-                                <TabItem Header="Sign in">
-                                    <StackPanel Margin="0,14,0,0">
-                                        <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
-                                                   FontSize="16"
-                                                   FontWeight="SemiBold"
-                                                   Text="Sign in with email and password" />
+                            <StackPanel>
+                                <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Text="Link email and password" />
 
-                                        <TextBlock Margin="0,16,0,6"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="12"
-                                                   Text="Email" />
-                                        <TextBox x:Name="EmailSignInEmailTextBox"
-                                                 Style="{StaticResource FieldTextBoxStyle}" />
+                                <TextBlock Margin="0,16,0,6"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="12"
+                                           Text="Display name (optional)" />
+                                <TextBox x:Name="EmailDisplayNameTextBox"
+                                         Style="{StaticResource FieldTextBoxStyle}" />
 
-                                        <TextBlock Margin="0,14,0,6"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="12"
-                                                   Text="Password" />
-                                        <PasswordBox x:Name="EmailSignInPasswordBox"
-                                                     Style="{StaticResource FieldPasswordStyle}" />
+                                <TextBlock Margin="0,14,0,6"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="12"
+                                           Text="Email" />
+                                <TextBox x:Name="EmailTextBox"
+                                         Style="{StaticResource FieldTextBoxStyle}" />
 
-                                        <Button Margin="0,18,0,0"
-                                                HorizontalAlignment="Left"
-                                                Click="EmailSignInButton_Click"
-                                                Content="Sign in"
-                                                Style="{StaticResource PrimaryButtonStyle}" />
-                                    </StackPanel>
-                                </TabItem>
+                                <TextBlock Margin="0,14,0,6"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="12"
+                                           Text="Password" />
+                                <PasswordBox x:Name="PasswordTextBox"
+                                             Style="{StaticResource FieldPasswordStyle}" />
 
-                                <TabItem Header="Create account">
-                                    <StackPanel Margin="0,14,0,0">
-                                        <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
-                                                   FontSize="16"
-                                                   FontWeight="SemiBold"
-                                                   Text="Create an email/password sign-in" />
-
-                                        <TextBlock Margin="0,16,0,6"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="12"
-                                                   Text="Display name (optional)" />
-                                        <TextBox x:Name="EmailRegisterDisplayNameTextBox"
-                                                 Style="{StaticResource FieldTextBoxStyle}" />
-
-                                        <TextBlock Margin="0,14,0,6"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="12"
-                                                   Text="Email" />
-                                        <TextBox x:Name="EmailRegisterEmailTextBox"
-                                                 Style="{StaticResource FieldTextBoxStyle}" />
-
-                                        <TextBlock Margin="0,14,0,6"
-                                                   Foreground="{StaticResource TextMutedBrush}"
-                                                   FontSize="12"
-                                                   Text="Password" />
-                                        <PasswordBox x:Name="EmailRegisterPasswordBox"
-                                                     Style="{StaticResource FieldPasswordStyle}" />
-
-                                        <Button Margin="0,18,0,0"
-                                                HorizontalAlignment="Left"
-                                                Click="EmailRegisterButton_Click"
-                                                Content="Create account"
-                                                Style="{StaticResource PrimaryButtonStyle}" />
-                                    </StackPanel>
-                                </TabItem>
-                            </TabControl>
+                                <Button Margin="0,18,0,0"
+                                        HorizontalAlignment="Left"
+                                        Click="EmailLinkButton_Click"
+                                        Content="Link email/password"
+                                        Style="{StaticResource PrimaryButtonStyle}" />
+                            </StackPanel>
                         </Border>
                     </TabItem>
                 </TabControl>
             </Grid>
 
-            <Grid Grid.Row="3"
+            <Grid Grid.Row="4"
                   Margin="0,18,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -333,7 +290,7 @@
                         Grid.Column="1"
                         Width="116"
                         Click="CancelButton_Click"
-                        Content="Cancel"
+                        Content="Close"
                         Style="{StaticResource SecondaryButtonStyle}" />
             </Grid>
         </Grid>

@@ -24,6 +24,7 @@ namespace CodeExplainer
         private AuthSessionManager? _authSessionManager;
         private WindowsStartupManager? _startupManager;
         private ToolStripMenuItem? _signInMenuItem;
+        private ToolStripMenuItem? _manageMethodsMenuItem;
         private ToolStripMenuItem? _logoutMenuItem;
         private ToolStripMenuItem? _startupMenuItem;
 
@@ -102,10 +103,12 @@ namespace CodeExplainer
             var contextMenu = new ContextMenuStrip();
             _startupMenuItem = new ToolStripMenuItem("Start On Windows Login", null, (_, _) => ToggleStartupFromTray());
             _signInMenuItem = new ToolStripMenuItem("Sign In", null, async (_, _) => await SignInFromTrayAsync());
+            _manageMethodsMenuItem = new ToolStripMenuItem("Manage Sign-In Methods", null, async (_, _) => await ManageAuthMethodsFromTrayAsync());
             _logoutMenuItem = new ToolStripMenuItem("Logout", null, async (_, _) => await LogoutFromTrayAsync());
             contextMenu.Items.Add(_startupMenuItem);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(_signInMenuItem);
+            contextMenu.Items.Add(_manageMethodsMenuItem);
             contextMenu.Items.Add(_logoutMenuItem);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add("Exit", null, (_, _) => ExitApp());
@@ -162,6 +165,11 @@ namespace CodeExplainer
             if (_logoutMenuItem != null)
             {
                 _logoutMenuItem.Enabled = authEnabled && hasSession;
+            }
+
+            if (_manageMethodsMenuItem != null)
+            {
+                _manageMethodsMenuItem.Enabled = authEnabled && hasSession;
             }
         }
 
@@ -416,7 +424,7 @@ namespace CodeExplainer
                 var loginWindow = new LoginWindow();
                 loginWindow.SetError(reason);
                 bool? result = loginWindow.ShowDialog();
-                if (result != true)
+                if (result != true || loginWindow.Submission == null)
                 {
                     UpdateTrayAuthStatus();
                     return false;
@@ -429,27 +437,170 @@ namespace CodeExplainer
                         return false;
                     }
 
-                    await _authSessionManager.SignInWithGoogleAsync();
-                    RuntimeLog.Info("Auth", "Google sign-in completed.");
+                    await ExecuteLoginSubmissionAsync(loginWindow.Submission);
                     UpdateTrayAuthStatus();
                     return true;
                 }
                 catch (AuthApiException ex)
                 {
-                    RuntimeLog.Warn("Auth", $"Google sign-in exchange failed: {ex.Message}");
+                    RuntimeLog.Warn("Auth", $"Interactive sign-in failed: {ex.Message}");
                     reason = ex.Message;
                 }
-                catch (GoogleSignInException ex)
+                catch (BrowserAuthException ex)
                 {
-                    RuntimeLog.Warn("Auth", $"Google sign-in canceled or failed locally: {ex.Message}");
+                    RuntimeLog.Warn("Auth", $"Browser sign-in failed locally: {ex.Message}");
                     reason = ex.Message;
                 }
                 catch (Exception ex)
                 {
-                    RuntimeLog.Error("Auth", $"Google sign-in request failed: {ex.Message}");
-                    reason = "Unable to complete Google sign-in. Check your connection and try again.";
+                    RuntimeLog.Error("Auth", $"Interactive sign-in failed: {ex.Message}");
+                    reason = "Unable to complete sign-in. Check your connection and try again.";
                 }
             }
+        }
+
+        private async Task ExecuteLoginSubmissionAsync(AuthWindowSubmission submission)
+        {
+            if (_authSessionManager == null)
+            {
+                throw new InvalidOperationException("The auth session manager is unavailable.");
+            }
+
+            switch (submission.Kind)
+            {
+                case AuthWindowSubmissionKind.RedeemCodeLogin:
+                    await _authSessionManager.RedeemCodeAsync(submission.Code);
+                    RuntimeLog.Info("Auth", "Redeem-code sign-in completed.");
+                    break;
+                case AuthWindowSubmissionKind.GoogleLogin:
+                    await _authSessionManager.SignInWithGoogleAsync();
+                    RuntimeLog.Info("Auth", "Google sign-in completed.");
+                    break;
+                case AuthWindowSubmissionKind.EmailPasswordLogin:
+                    await _authSessionManager.SignInWithEmailPasswordAsync(submission.Email, submission.Password);
+                    RuntimeLog.Info("Auth", "Email/password sign-in completed.");
+                    break;
+                case AuthWindowSubmissionKind.EmailPasswordRegister:
+                    await _authSessionManager.RegisterWithEmailPasswordAsync(submission.Email, submission.Password, submission.DisplayName);
+                    RuntimeLog.Info("Auth", "Email/password registration completed.");
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unsupported login submission kind: {submission.Kind}");
+            }
+        }
+
+        private async Task ManageAuthMethodsFromTrayAsync()
+        {
+            if (_config?.AuthEnabled == false)
+            {
+                _trayIcon?.ShowBalloonTip(2500, "simpleDocs", "Sign-in is disabled in the current environment.", ToolTipIcon.Info);
+                return;
+            }
+
+            if (_authSessionManager == null)
+            {
+                return;
+            }
+
+            bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in to manage your account methods.");
+            if (!authenticated)
+            {
+                return;
+            }
+
+            string reason = string.Empty;
+            while (true)
+            {
+                AuthStateResponse authState;
+                try
+                {
+                    authState = await _authSessionManager.GetCurrentAuthStateAsync();
+                }
+                catch (SessionExpiredException ex)
+                {
+                    RuntimeLog.Warn("Auth", $"Account-method load expired the session: {ex.Message}");
+                    bool reauthenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in again to manage your account methods.");
+                    if (!reauthenticated)
+                    {
+                        return;
+                    }
+
+                    reason = ex.Message;
+                    continue;
+                }
+
+                var accountWindow = new AccountMethodsWindow(authState);
+                if (!string.IsNullOrWhiteSpace(reason))
+                {
+                    accountWindow.SetError(reason);
+                }
+
+                bool? result = accountWindow.ShowDialog();
+                if (result != true || accountWindow.Submission == null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await ExecuteAccountMethodSubmissionAsync(accountWindow.Submission);
+                    UpdateTrayAuthStatus();
+                    _trayIcon?.ShowBalloonTip(2500, "simpleDocs", $"{DescribeSubmission(accountWindow.Submission)} was added to this account.", ToolTipIcon.Info);
+                    return;
+                }
+                catch (AuthApiException ex)
+                {
+                    RuntimeLog.Warn("Auth", $"Account linking failed: {ex.Message}");
+                    reason = ex.Message;
+                }
+                catch (BrowserAuthException ex)
+                {
+                    RuntimeLog.Warn("Auth", $"Browser account linking failed locally: {ex.Message}");
+                    reason = ex.Message;
+                }
+                catch (Exception ex)
+                {
+                    RuntimeLog.Error("Auth", $"Account linking failed: {ex.Message}");
+                    reason = "Unable to update account methods right now. Try again in a moment.";
+                }
+            }
+        }
+
+        private async Task ExecuteAccountMethodSubmissionAsync(AuthWindowSubmission submission)
+        {
+            if (_authSessionManager == null)
+            {
+                throw new InvalidOperationException("The auth session manager is unavailable.");
+            }
+
+            switch (submission.Kind)
+            {
+                case AuthWindowSubmissionKind.GoogleLink:
+                    await _authSessionManager.LinkGoogleAsync();
+                    RuntimeLog.Info("Auth", "Google method linked to the current account.");
+                    break;
+                case AuthWindowSubmissionKind.RedeemCodeLink:
+                    await _authSessionManager.LinkRedeemCodeAsync(submission.Code);
+                    RuntimeLog.Info("Auth", "Redeem-code method linked to the current account.");
+                    break;
+                case AuthWindowSubmissionKind.EmailPasswordLink:
+                    await _authSessionManager.LinkEmailPasswordAsync(submission.Email, submission.Password, submission.DisplayName);
+                    RuntimeLog.Info("Auth", "Email/password method linked to the current account.");
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unsupported account submission kind: {submission.Kind}");
+            }
+        }
+
+        private static string DescribeSubmission(AuthWindowSubmission submission)
+        {
+            return submission.Kind switch
+            {
+                AuthWindowSubmissionKind.GoogleLink => "Google sign-in",
+                AuthWindowSubmissionKind.RedeemCodeLink => "Redeem code",
+                AuthWindowSubmissionKind.EmailPasswordLink => "Email/password sign-in",
+                _ => "The account method"
+            };
         }
 
         private async Task SignInFromTrayAsync()
@@ -483,11 +634,7 @@ namespace CodeExplainer
             await _authSessionManager.LogoutAsync();
             UpdateTrayAuthStatus();
             _overlayWindow?.ShowMessage("You have been signed out.", "signed out");
-            bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in with Google to continue.");
-            if (!authenticated)
-            {
-                _trayIcon?.ShowBalloonTip(3000, "simpleDocs", "You are currently signed out.", ToolTipIcon.Warning);
-            }
+            _trayIcon?.ShowBalloonTip(2500, "simpleDocs", "You are signed out.", ToolTipIcon.Info);
         }
 
         private static string BuildStatusLabel(CaptureResult captureResult)
