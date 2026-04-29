@@ -94,14 +94,15 @@ namespace CodeExplainer
 
         public async Task LinkGoogleAsync()
         {
-            string accessToken = await EnsureValidAccessTokenAsync();
-            BrowserAuthPreparationResponse preparation = await _authApiClient.PrepareGoogleLinkAsync(_browserAuthCoordinator.RedirectUri, accessToken);
+            string prepareAccessToken = await EnsureValidAccessTokenAsync();
+            BrowserAuthPreparationResponse preparation = await _authApiClient.PrepareGoogleLinkAsync(_browserAuthCoordinator.RedirectUri, prepareAccessToken);
             BrowserAuthorizationResult authorization = await _browserAuthCoordinator.AuthorizeAsync(preparation.AuthorizationUrl);
+            string completeAccessToken = await EnsureValidAccessTokenAsync();
             await _authApiClient.CompleteGoogleLinkAsync(
                 authorization.AuthorizationCode,
                 authorization.State,
                 preparation.FlowToken,
-                accessToken);
+                completeAccessToken);
         }
 
         public async Task LinkRedeemCodeAsync(string code)
