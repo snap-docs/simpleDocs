@@ -14,8 +14,10 @@ This document tracks the current implementation status of the deployment-ready s
 
 ### Auth and session
 
-- redeem-code login UI exists in the WPF client
-- backend redeem / refresh / logout endpoints exist
+- provider-based auth UI exists in the WPF client
+- redeem-code, Google, and email/password auth flows exist
+- account-method linking UI exists in the tray flow
+- backend provider login / link / refresh / logout endpoints exist
 - client stores tokens securely on Windows
 - session restore and silent refresh are implemented
 - WebSocket auth is validated on connect
@@ -43,6 +45,7 @@ This document tracks the current implementation status of the deployment-ready s
 - Azure backend is deployed
 - hosted health endpoint works
 - hosted redeem-code login works
+- the shared auth foundation now supports Google and email/password without changing the capture pipeline
 - hosted refresh/logout flow works
 - hosted authenticated WebSocket explanation works
 - hosted DB logging works
@@ -73,7 +76,7 @@ This document tracks the current implementation status of the deployment-ready s
 
 ## Current Truth
 
-The main implementation work is complete.
+The main implementation work is complete enough for pilot-stage rollout.
 
 The remaining work is mostly rollout validation, package validation on more machines, and pilot operations.
 

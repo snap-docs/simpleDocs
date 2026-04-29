@@ -193,12 +193,23 @@ async function verifyGoogleIdToken(idToken) {
 
 async function exchangeGoogleCodeForIdentity({ code, codeVerifier, redirectUri }) {
   const oauthConfig = requireGoogleOAuthConfig();
+  const normalizedCode = typeof code === 'string' ? code.trim() : '';
+  const normalizedCodeVerifier = typeof codeVerifier === 'string' ? codeVerifier.trim() : '';
+  const normalizedRedirectUri = requireLoopbackRedirectUri(redirectUri);
+  if (!normalizedCode) {
+    throw new AuthError(400, 'code is required', 'google_code_missing');
+  }
+
+  if (!normalizedCodeVerifier) {
+    throw new AuthError(400, 'code_verifier is required', 'google_code_verifier_missing');
+  }
+
   const requestBody = new URLSearchParams({
     client_id: oauthConfig.clientId,
-    code,
-    code_verifier: codeVerifier,
+    code: normalizedCode,
+    code_verifier: normalizedCodeVerifier,
     grant_type: 'authorization_code',
-    redirect_uri: redirectUri
+    redirect_uri: normalizedRedirectUri
   });
 
   if (oauthConfig.clientSecret) {
@@ -283,6 +294,37 @@ async function exchangeGoogleCodeForIdentity({ code, codeVerifier, redirectUri }
     familyName: normalizeOptionalText(claims.family_name),
     avatarUrl: normalizeOptionalText(claims.picture)
   };
+}
+
+async function resolveGoogleLogin(identity) {
+  const existingLink = await findProviderLink(AUTH_PROVIDER_TYPES.GOOGLE, identity.subject);
+  if (existingLink) {
+    const participant = await getParticipantById(existingLink.participant_id);
+    return upsertGoogleProviderLink(participant, identity, existingLink);
+  }
+
+  const emailMatches = identity.email
+    ? await listParticipantsByEmail(identity.email)
+    : [];
+  if (emailMatches.length > 0) {
+    throw new AuthError(
+      409,
+      'That Google account matches an existing user. Sign in with an existing method first, then link Google from the account menu.',
+      'google_link_required'
+    );
+  }
+
+  const participant = await createParticipant({
+    email: identity.email || null,
+    emailVerified: identity.emailVerified,
+    displayName: identity.displayName,
+    givenName: identity.givenName,
+    familyName: identity.familyName,
+    avatarUrl: identity.avatarUrl,
+    lastAuthenticatedAt: new Date().toISOString()
+  });
+
+  return upsertGoogleProviderLink(participant, identity, null);
 }
 
 async function upsertGoogleProviderLink(participant, identity, existingLink = null) {
@@ -396,34 +438,17 @@ export async function completeGoogleLogin({ code, state, flowToken }) {
     redirectUri: flow.redirect_uri
   });
 
-  const existingLink = await findProviderLink(AUTH_PROVIDER_TYPES.GOOGLE, identity.subject);
-  if (existingLink) {
-    const participant = await getParticipantById(existingLink.participant_id);
-    return upsertGoogleProviderLink(participant, identity, existingLink);
-  }
+  return resolveGoogleLogin(identity);
+}
 
-  const emailMatches = identity.email
-    ? await listParticipantsByEmail(identity.email)
-    : [];
-  if (emailMatches.length > 0) {
-    throw new AuthError(
-      409,
-      'That Google account matches an existing user. Sign in with an existing method first, then link Google from the account menu.',
-      'google_link_required'
-    );
-  }
-
-  const participant = await createParticipant({
-    email: identity.email || null,
-    emailVerified: identity.emailVerified,
-    displayName: identity.displayName,
-    givenName: identity.givenName,
-    familyName: identity.familyName,
-    avatarUrl: identity.avatarUrl,
-    lastAuthenticatedAt: new Date().toISOString()
+export async function completeGoogleLegacyLogin({ code, codeVerifier, redirectUri }) {
+  const identity = await exchangeGoogleCodeForIdentity({
+    code,
+    codeVerifier,
+    redirectUri
   });
 
-  return upsertGoogleProviderLink(participant, identity, null);
+  return resolveGoogleLogin(identity);
 }
 
 export async function completeGoogleLink({ code, state, flowToken, expectedParticipantId = null }) {

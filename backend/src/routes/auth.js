@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import {
   authenticateRequest,
+  completeGoogleLegacyLoginFlow,
   completeGoogleLinkFlowForAuthenticatedUser,
   completeGoogleLoginFlow,
   createAuthErrorResponse,
@@ -102,7 +103,10 @@ export function createAuthRoute() {
         return c.json({ error: 'Invalid JSON body' }, 400);
       }
 
-      const result = await completeGoogleLoginFlow(body.code, body.state, body.flow_token);
+      const isLegacyExchange = typeof body.code_verifier === 'string' || typeof body.redirect_uri === 'string';
+      const result = isLegacyExchange
+        ? await completeGoogleLegacyLoginFlow(body.code, body.code_verifier, body.redirect_uri)
+        : await completeGoogleLoginFlow(body.code, body.state, body.flow_token);
       return c.json(result);
     } catch (error) {
       const response = createAuthErrorResponse(error);
@@ -111,6 +115,7 @@ export function createAuthRoute() {
   };
 
   route.post('/providers/google/login/complete', googleLoginCompleteHandler);
+  // Legacy compatibility for older client builds that still post PKCE material directly.
   route.post('/google/exchange', googleLoginCompleteHandler);
 
   route.post('/providers/google/link/prepare', async (c) => {

@@ -16,6 +16,10 @@
 - restart the Azure Web App
 - confirm `https://<your-app>/api/health` returns `ok`
 - confirm `POST /auth/redeem-code` returns tokens for a fresh redeem code
+- confirm Google auth variables are configured before enabling Google sign-in in production:
+  - `GOOGLE_CLIENT_ID`
+  - `GOOGLE_CLIENT_SECRET` if required by the app registration
+  - `AUTH_FLOW_TOKEN_SECRET`
 
 ## 2. Database Readiness
 
@@ -25,6 +29,8 @@
 - confirm these tables are reachable:
   - `participants`
   - `redeem_codes`
+  - `auth_provider_links`
+  - `auth_sessions`
   - `refresh_tokens`
   - `request_logs`
 
@@ -64,6 +70,8 @@
 ## 5. Functional Verification
 
 - redeem-code login works against the hosted backend
+- Google sign-in works if Google auth is enabled for the release
+- email/password sign-up and sign-in work if email/password is enabled for the release
 - access token refresh works after restart
 - logout works
 - authenticated WebSocket connect works
@@ -79,6 +87,8 @@
 After one successful hosted test request, confirm these DB effects:
 
 - one `participant` row exists or is reused
+- one or more `auth_provider_links` rows exist for the chosen sign-in method
+- one `auth_sessions` row exists
 - one `refresh_tokens` row exists
 - one `request_logs` row exists with expected values
 - the row includes the expected `task_type` and `status`
@@ -87,7 +97,7 @@ After one successful hosted test request, confirm these DB effects:
 ## 7. Operational Readiness
 
 - tester guide is packaged
-- redeem-code issuance list is tracked
+- sign-in method provisioning is tracked for the pilot group
 - privacy/support contact is prepared
 - internal pilot users are selected
 - development keys are rotated if necessary

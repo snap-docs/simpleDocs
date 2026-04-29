@@ -31,12 +31,15 @@ The main file the tester should use is:
 3. Open the `app` folder.
 4. Double-click `CodeExplainer.exe`.
 5. If Windows shows a security prompt, choose the option to continue if the tester trusts the app source.
-6. Enter the redeem code when the sign-in window appears.
+6. Sign in with the method your team provided:
+   - redeem code
+   - Google
+   - email and password
 7. Wait until the tray icon shows the app is ready.
 
 ## Daily use after first sign-in
 
-The tester does not need to enter the redeem code every time.
+The tester does not need to sign in every time.
 
 The app stores the signed-in session on that Windows user profile.
 
@@ -70,7 +73,7 @@ If we send a new zip later, the tester should:
 
 Normally they should still stay signed in as the same user on the same Windows account, because the auth state is stored separately on the machine.
 
-They only need a new redeem code if:
+They only need to sign in again if:
 
 - the local signed-in state was deleted
 - they use a different Windows user account
@@ -113,7 +116,8 @@ Do not ask the tester to use PowerShell for normal usage.
 
 Ask them to report:
 
-- the redeem code or tester id
+- the sign-in method they used
+- the tester id if one exists
 - the time of the issue
 - the app they were using
 - what they selected
@@ -122,4 +126,4 @@ Ask them to report:
 
 ## Recommended message you can send to testers
 
-Extract the zip first, then open `app\CodeExplainer.exe`. Sign in once with your redeem code. After that, you can keep using the same app folder and open the exe whenever you want. The app also starts automatically with Windows by default, and you can change that later from the tray menu.
+Extract the zip first, then open `app\CodeExplainer.exe`. Sign in once with the method we provided for your account. After that, you can keep using the same app folder and open the exe whenever you want. The app also starts automatically with Windows by default, and you can change that later from the tray menu.

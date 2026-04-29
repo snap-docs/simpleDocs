@@ -11,7 +11,7 @@ import {
   refreshAccessTokenFromRefreshToken,
   startAuthenticatedSession
 } from './sessionService.js';
-import { completeGoogleLink, completeGoogleLogin, prepareGoogleLink, prepareGoogleLogin } from './providers/googleAuthProvider.js';
+import { completeGoogleLegacyLogin, completeGoogleLink, completeGoogleLogin, prepareGoogleLink, prepareGoogleLogin } from './providers/googleAuthProvider.js';
 import { authenticateWithEmailPassword, linkEmailPasswordToParticipant, registerWithEmailPassword } from './providers/passwordAuthProvider.js';
 import { authenticateWithRedeemCode, linkRedeemCodeToParticipant } from './providers/redeemCodeAuthProvider.js';
 
@@ -111,6 +111,14 @@ export async function prepareGoogleLoginFlow(redirectUri) {
 
 export async function completeGoogleLoginFlow(code, state, flowToken) {
   return buildLoginResponse(await completeGoogleLogin({ code, state, flowToken }));
+}
+
+export async function completeGoogleLegacyLoginFlow(code, codeVerifier, redirectUri) {
+  return buildLoginResponse(await completeGoogleLegacyLogin({
+    code,
+    codeVerifier,
+    redirectUri
+  }));
 }
 
 export async function prepareGoogleLinkFlow(redirectUri, authUser) {

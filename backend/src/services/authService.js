@@ -1,6 +1,7 @@
 export {
   authenticateRequest,
   createAuthErrorResponse,
+  completeGoogleLegacyLoginFlow,
   completeGoogleLinkFlow,
   completeGoogleLinkFlowForAuthenticatedUser,
   completeGoogleLoginFlow,

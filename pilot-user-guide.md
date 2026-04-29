@@ -3,7 +3,10 @@
 ## Sign In
 
 1. Launch `CodeExplainer.exe`.
-2. Enter the redeem code you received if the sign-in window appears.
+2. Sign in with the method your team gave you:
+   - redeem code
+   - Google
+   - email and password
 3. Wait for the tray icon to show that the app is ready.
 
 ## Use The App
@@ -33,13 +36,14 @@ For pilot testing, use the tool only on content that is allowed for the study.
 
 1. Check that your internet connection is working.
 2. Close and reopen the app.
-3. If sign-in fails, verify the redeem code with support.
-4. If the code is already used, ask support for a fresh code.
+3. If sign-in fails, confirm you are using the correct sign-in method for your account.
+4. If a redeem code is already used, ask support whether it should be linked or replaced.
 5. If the app still fails, send support the time, the app you were using, and what you selected.
 
 ## What To Send Support
 
-- your tester code or tester id
+- your sign-in method
+- your tester code or tester id if one exists
 - when the problem happened
 - what app you were using
 - what text you selected

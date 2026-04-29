@@ -23,7 +23,10 @@ Implemented now:
 - native capture pipeline is in place
 - overlay streaming response flow is in place
 - short overlay-focused explanation style is in place
-- one-time redeem-code auth is implemented
+- unified auth foundation is implemented
+- redeem-code auth is implemented
+- backend-controlled Google sign-in is implemented
+- email/password sign-up and sign-in are implemented
 - Windows secure token storage with DPAPI is implemented
 - authenticated WebSocket explain flow is implemented
 - hosted request logging is implemented
@@ -36,6 +39,7 @@ Implemented now:
 - Azure App Service backend is live
 - hosted `/api/health` is live and returning `ok`
 - hosted redeem-code login, refresh, and logout flows are working
+- provider-based auth routes now support Google and email/password on the same shared identity model
 - hosted DB connectivity checks are working
 - Groq fallback-key support is implemented in the backend
 
@@ -49,7 +53,7 @@ Current remaining rollout work:
 ## Runtime Flow
 
 1. User launches the Windows client.
-2. The client restores the stored session or prompts for a redeem code.
+2. The client restores the stored session or prompts for sign-in.
 3. The client stores tokens securely on Windows using DPAPI.
 4. The app runs hidden to tray and registers the global hotkey.
 5. The user highlights text and presses the hotkey.
@@ -66,6 +70,8 @@ Hosted Supabase/Postgres is used for:
 
 - `participants`
 - `redeem_codes`
+- `auth_provider_links`
+- `auth_sessions`
 - `refresh_tokens`
 - `request_logs`
 
@@ -105,6 +111,8 @@ The system no longer stores `session_id`, `is_partial`, `is_unsupported`, or `fe
   BackendClient.cs
   AuthApiClient.cs
   AuthSessionManager.cs
+  BrowserAuthCoordinator.cs
+  AccountMethodsWindow.xaml
   SecureTokenStore.cs
   LoginWindow.xaml
   OverlayWindow.xaml
@@ -116,6 +124,7 @@ The system no longer stores `session_id`, `is_partial`, `is_unsupported`, or `fe
   /scripts
     check-db-config.js
   /src
+    /auth
     /config
     /db
     /middleware
@@ -189,7 +198,7 @@ Remaining operational validation:
 ## Immediate Next Steps
 
 1. validate the latest zip on one clean Windows machine
-2. issue redeem codes to internal pilot users
+2. issue redeem codes or provision the chosen sign-in method for internal pilot users
 3. monitor `request_logs` and `feedback_reaction` during pilot use
 4. collect capture-quality feedback from editors, browsers, and terminals
 5. rotate temporary development secrets before a wider external rollout
