@@ -15,6 +15,10 @@ namespace CodeExplainer
         public int WebSocketConnectTimeoutSeconds { get; init; } = 30;
         public int WebSocketRetryCount { get; init; } = 3;
         public int WebSocketRetryBaseDelayMs { get; init; } = 500;
+        public bool EnableVisionPipeline { get; init; } = true;
+        public int VisionMaxImageBytes { get; init; } = 819200;
+        public int VisionCaptureTimeoutMs { get; init; } = 800;
+        public string? VisionDebugDirectory { get; init; }
 
         public static ClientConfig Load()
         {
@@ -47,7 +51,11 @@ namespace CodeExplainer
                 AuthBrowserCallbackPort = ParseAuthBrowserCallbackPort(settings),
                 WebSocketConnectTimeoutSeconds = ParseIntOverride("CODE_EXPLAINER_WS_CONNECT_TIMEOUT_SECONDS", settings.Streaming.ConnectTimeoutSeconds, 30),
                 WebSocketRetryCount = ParseIntOverride("CODE_EXPLAINER_WS_RETRY_COUNT", settings.Streaming.RetryCount, 3),
-                WebSocketRetryBaseDelayMs = ParseIntOverride("CODE_EXPLAINER_WS_RETRY_BASE_DELAY_MS", settings.Streaming.RetryBaseDelayMs, 500)
+                WebSocketRetryBaseDelayMs = ParseIntOverride("CODE_EXPLAINER_WS_RETRY_BASE_DELAY_MS", settings.Streaming.RetryBaseDelayMs, 500),
+                EnableVisionPipeline = ParseBoolOverride("CODE_EXPLAINER_ENABLE_VISION_PIPELINE", settings.Vision.Enabled, true),
+                VisionMaxImageBytes = ParseIntOverride("CODE_EXPLAINER_VISION_MAX_IMAGE_BYTES", settings.Vision.MaxImageBytes, 819200),
+                VisionCaptureTimeoutMs = ParseIntOverride("CODE_EXPLAINER_VISION_CAPTURE_TIMEOUT_MS", settings.Vision.CaptureTimeoutMs, 800),
+                VisionDebugDirectory = GetEnvOverride("CODE_EXPLAINER_VISION_DEBUG_DIR")
             };
         }
 
@@ -89,6 +97,9 @@ namespace CodeExplainer
             target.Streaming.ConnectTimeoutSeconds = source.Streaming.ConnectTimeoutSeconds ?? target.Streaming.ConnectTimeoutSeconds;
             target.Streaming.RetryCount = source.Streaming.RetryCount ?? target.Streaming.RetryCount;
             target.Streaming.RetryBaseDelayMs = source.Streaming.RetryBaseDelayMs ?? target.Streaming.RetryBaseDelayMs;
+            target.Vision.Enabled = source.Vision.Enabled ?? target.Vision.Enabled;
+            target.Vision.MaxImageBytes = source.Vision.MaxImageBytes ?? target.Vision.MaxImageBytes;
+            target.Vision.CaptureTimeoutMs = source.Vision.CaptureTimeoutMs ?? target.Vision.CaptureTimeoutMs;
         }
 
         private static string? GetEnvOverride(string name)
@@ -191,6 +202,7 @@ namespace CodeExplainer
             public BackendSection Backend { get; set; } = new();
             public AuthSection Auth { get; set; } = new();
             public StreamingSection Streaming { get; set; } = new();
+            public VisionSection Vision { get; set; } = new();
         }
 
         private sealed class BackendSection
@@ -212,6 +224,13 @@ namespace CodeExplainer
             public int? ConnectTimeoutSeconds { get; set; }
             public int? RetryCount { get; set; }
             public int? RetryBaseDelayMs { get; set; }
+        }
+
+        private sealed class VisionSection
+        {
+            public bool? Enabled { get; set; }
+            public int? MaxImageBytes { get; set; }
+            public int? CaptureTimeoutMs { get; set; }
         }
     }
 }

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
 using System.Drawing;
+using CodeExplainer.ContextCapture.Vision;
 using CodeExplainer.Engine;
 using CodeExplainer.Engine.Managers;
 using CodeExplainer.Engine.Models;
@@ -22,6 +23,7 @@ namespace CodeExplainer
         private int _requestSequence;
         private ClientConfig? _config;
         private AuthSessionManager? _authSessionManager;
+        private IVisionCaptureService? _visionCaptureService;
         private WindowsStartupManager? _startupManager;
         private ToolStripMenuItem? _signInMenuItem;
         private ToolStripMenuItem? _manageMethodsMenuItem;
@@ -62,6 +64,7 @@ namespace CodeExplainer
 
             // Setup new engine
             _captureEngine = new ContextCaptureEngine();
+            _visionCaptureService = new VisionCaptureService(_config);
 
             // Create overlay (hidden initially)
             _overlayWindow = new OverlayWindow();
@@ -258,9 +261,13 @@ namespace CodeExplainer
             if (_authSessionManager == null) return;
 
             await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
+            System.Drawing.Point cursorPosition = Control.MousePosition;
+            Task<CaptureResult> textCaptureTask = _captureEngine.ExecuteCaptureAsync(requestId);
+            Task<VisionCaptureResult?> visionCaptureTask = TryCaptureVisionAsync(requestId, cursorPosition);
 
-            // Execute the centralized engine capture pipeline
-            var captureResult = await _captureEngine.ExecuteCaptureAsync(requestId);
+            CaptureResult captureResult = await textCaptureTask;
+            VisionCaptureResult? visionResult = await visionCaptureTask;
+
             RuntimeLog.Info(
                 "Capture",
                 $"req={requestId} process={captureResult.ProcessName} title=\"{RuntimeLog.Preview(captureResult.WindowTitle, 60)}\" env={captureResult.Type.ToApiValue()} " +
@@ -284,7 +291,19 @@ namespace CodeExplainer
                 RuntimeLog.Info("Capture", $"req={requestId} Background full: {EscapeForSingleLineLog(captureResult.BackgroundContext)}");
             }
 
-            if (captureResult.IsUnsupported)
+            if (visionResult?.HasAnyImage == true)
+            {
+                RuntimeLog.Info(
+                    "Vision",
+                    $"req={requestId} cursor_bytes={visionResult.CursorRegionPng.Length} panel_bytes={visionResult.ActivePanelPng.Length} window_bytes={visionResult.FullWindowPng.Length} ocr_chars={visionResult.ExtractedTextOcr.Length}");
+                if (!string.IsNullOrWhiteSpace(_config?.VisionDebugDirectory))
+                {
+                    VisionDebugExporter.Export(_config!.VisionDebugDirectory!, requestId.ToString(), visionResult);
+                }
+            }
+
+            bool hasVisionPayload = visionResult?.HasAnyImage == true;
+            if (captureResult.IsUnsupported && !hasVisionPayload)
             {
                 RuntimeLog.Warn("Capture", $"req={requestId} {captureResult.StatusMessage}");
                 _overlayWindow?.ShowMessage(
@@ -293,61 +312,121 @@ namespace CodeExplainer
                 return;
             }
 
-            if (captureResult.HasSelectedText)
-            {
-                string accessToken = string.Empty;
-                if (_config?.AuthEnabled != false)
-                {
-                    try
-                    {
-                        accessToken = await _authSessionManager.EnsureValidAccessTokenAsync();
-                    }
-                    catch (SessionExpiredException ex)
-                    {
-                        RuntimeLog.Warn("Auth", $"req={requestId} session expired while preparing backend request: {ex.Message}");
-                        bool reauthenticated = await EnsureAuthenticatedAsync(interactive: true, "Your session expired. Sign in again to continue.");
-                        if (!reauthenticated)
-                        {
-                            _overlayWindow?.ShowMessage("Your session expired. Sign in again to continue.", "auth required");
-                            return;
-                        }
-
-                        accessToken = await _authSessionManager.EnsureValidAccessTokenAsync();
-                    }
-                }
-
-                string streamRequestId = _authSessionManager.BuildRequestId(requestId);
-                RuntimeLog.Info("Backend", $"req={requestId} Sending capture payload to backend.");
-                _overlayWindow?.ShowLoading(BuildStatusLabel(captureResult), streamRequestId);
-
-                await BackendClient.SendExplainRequest(
-                    captureResult.SelectedText,
-                    captureResult.BackgroundContext,
-                    captureResult.WindowTitle,
-                    captureResult.ProcessName,
-                    captureResult.Type.ToApiValue(),
-                    captureResult.SelectedMethod.ToApiValue(),
-                    captureResult.BackgroundMethod.ToApiValue(),
-                    captureResult.IsPartial,
-                    captureResult.StatusMessage,
-                    captureResult.IsUnsupported,
-                    accessToken,
-                    streamRequestId,
-                    captureResult.UsageContext,
-                    token => _overlayWindow?.AppendToken(token),
-                    status => _overlayWindow?.SetStatus(status),
-                    () => _overlayWindow?.OnStreamComplete(),
-                    ocrUsed:       captureResult.OcrUsed,
-                    ocrConfidence: captureResult.OcrConfidence
-                );
-            }
-            else
+            if (!captureResult.HasSelectedText && !hasVisionPayload)
             {
                 RuntimeLog.Warn("Overlay", $"req={requestId} {captureResult.StatusMessage}");
                 _overlayWindow?.ShowMessage(
                     captureResult.StatusMessage,
                     BuildStatusLabel(captureResult));
+                return;
             }
+
+            string accessToken = string.Empty;
+            if (_config?.AuthEnabled != false)
+            {
+                try
+                {
+                    accessToken = await _authSessionManager.EnsureValidAccessTokenAsync();
+                }
+                catch (SessionExpiredException ex)
+                {
+                    RuntimeLog.Warn("Auth", $"req={requestId} session expired while preparing backend request: {ex.Message}");
+                    bool reauthenticated = await EnsureAuthenticatedAsync(interactive: true, "Your session expired. Sign in again to continue.");
+                    if (!reauthenticated)
+                    {
+                        _overlayWindow?.ShowMessage("Your session expired. Sign in again to continue.", "auth required");
+                        return;
+                    }
+
+                    accessToken = await _authSessionManager.EnsureValidAccessTokenAsync();
+                }
+            }
+
+            string streamRequestId = _authSessionManager.BuildRequestId(requestId);
+            ExplainStreamRequest request = BuildExplainStreamRequest(
+                streamRequestId,
+                captureResult,
+                visionResult,
+                cursorPosition);
+
+            RuntimeLog.Info("Backend", $"req={requestId} Sending capture payload to backend.");
+            _overlayWindow?.ShowLoading(BuildStatusLabel(captureResult, request.CaptureMethodExtended), streamRequestId);
+
+            await BackendClient.SendExplainRequest(
+                request,
+                accessToken,
+                token => _overlayWindow?.AppendToken(token),
+                status => _overlayWindow?.SetStatus(status),
+                () => _overlayWindow?.OnStreamComplete());
+        }
+
+        private async Task<VisionCaptureResult?> TryCaptureVisionAsync(int requestId, System.Drawing.Point cursorPosition)
+        {
+            if (_config?.EnableVisionPipeline != true || _visionCaptureService == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                return await _visionCaptureService.CaptureAsync(
+                    new System.Windows.Point(cursorPosition.X, cursorPosition.Y),
+                    CaptureMode.AllLayers);
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Warn("Vision", $"req={requestId} capture failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        private static ExplainStreamRequest BuildExplainStreamRequest(
+            string requestId,
+            CaptureResult captureResult,
+            VisionCaptureResult? visionResult,
+            System.Drawing.Point cursorPosition)
+        {
+            bool hasVisionPayload = visionResult?.HasAnyImage == true;
+            string? selectedText = captureResult.HasSelectedText ? captureResult.SelectedText : null;
+            string backgroundContext = !string.IsNullOrWhiteSpace(captureResult.BackgroundContext)
+                ? captureResult.BackgroundContext
+                : visionResult?.BackgroundContextUia ?? string.Empty;
+
+            return new ExplainStreamRequest
+            {
+                RequestId = requestId,
+                UsageContext = captureResult.UsageContext,
+                SelectedText = selectedText,
+                BackgroundContext = backgroundContext,
+                OcrText = visionResult?.ExtractedTextOcr,
+                WindowTitle = captureResult.WindowTitle,
+                ProcessName = captureResult.ProcessName,
+                EnvironmentType = captureResult.Type.ToApiValue(),
+                SelectedMethod = captureResult.SelectedMethod.ToApiValue(),
+                BackgroundMethod = captureResult.BackgroundMethod.ToApiValue(),
+                CaptureMethodExtended = DetermineCaptureMethodExtended(captureResult, hasVisionPayload),
+                IsPartial = captureResult.IsPartial,
+                IsUnsupported = captureResult.IsUnsupported && !hasVisionPayload,
+                StatusMessage = captureResult.StatusMessage,
+                OcrUsed = captureResult.OcrUsed || !string.IsNullOrWhiteSpace(visionResult?.ExtractedTextOcr),
+                OcrConfidence = captureResult.OcrConfidence,
+                Vision = visionResult,
+                CursorPosition = new CursorPositionPayload
+                {
+                    X = cursorPosition.X,
+                    Y = cursorPosition.Y
+                }
+            };
+        }
+
+        private static string DetermineCaptureMethodExtended(CaptureResult captureResult, bool hasVisionPayload)
+        {
+            if (captureResult.HasSelectedText)
+            {
+                return hasVisionPayload ? "vision_augmented" : "text_only";
+            }
+
+            return hasVisionPayload ? "vision_only" : "text_only";
         }
 
         private async Task<bool> SubmitFeedbackAsync(string requestId, string reaction)
@@ -637,10 +716,11 @@ namespace CodeExplainer
             _trayIcon?.ShowBalloonTip(2500, "simpleDocs", "You are signed out.", ToolTipIcon.Info);
         }
 
-        private static string BuildStatusLabel(CaptureResult captureResult)
+        private static string BuildStatusLabel(CaptureResult captureResult, string? captureMethodExtended = null)
         {
             string mode = captureResult.IsPartial ? "partial" : "full";
-            return $"{captureResult.Type.ToApiValue()} | {captureResult.SelectedMethod.ToApiValue()} + {captureResult.BackgroundMethod.ToApiValue()} | {mode}";
+            string extended = string.IsNullOrWhiteSpace(captureMethodExtended) ? string.Empty : $" | {captureMethodExtended}";
+            return $"{captureResult.Type.ToApiValue()} | {captureResult.SelectedMethod.ToApiValue()} + {captureResult.BackgroundMethod.ToApiValue()} | {mode}{extended}";
         }
 
         private static string EscapeForSingleLineLog(string? text)

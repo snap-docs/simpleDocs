@@ -26,6 +26,8 @@ export function validateRuntimeConfig(environmentName = 'development') {
   const accessTokenSecret = explicitAccessTokenSecret || fallbackJwtSecret;
   const explicitFlowTokenSecret = process.env.AUTH_FLOW_TOKEN_SECRET;
   const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+  const visionEnabled = process.env.ENABLE_VISION_PIPELINE !== 'false';
 
   if (process.env.SKIP_AUTH === 'true') {
     warnings.push('SKIP_AUTH=true is enabled. Auth is bypassed for protected backend routes.');
@@ -48,6 +50,10 @@ export function validateRuntimeConfig(environmentName = 'development') {
 
   if (isProtectedMode && (isBlank(googleClientId) || isPlaceholder(googleClientId))) {
     warnings.push('GOOGLE_CLIENT_ID is missing. Google sign-in cannot complete in protected auth mode.');
+  }
+
+  if (visionEnabled && (isBlank(anthropicApiKey) || isPlaceholder(anthropicApiKey))) {
+    warnings.push('ANTHROPIC_API_KEY is missing. Vision-augmented capture will fall back to text-only mode.');
   }
 
   if (isProtectedMode && (isBlank(serviceRoleKey) || isPlaceholder(serviceRoleKey))) {

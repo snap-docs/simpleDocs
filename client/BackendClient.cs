@@ -27,55 +27,65 @@ namespace CodeExplainer
         /// Sends an explain request and receives streamed tokens via WebSocket.
         /// </summary>
         public static async Task SendExplainRequest(
-            string selectedText,
-            string backgroundContext,
-            string windowTitle,
-            string processName,
-            string environmentType,
-            string selectedMethod,
-            string backgroundMethod,
-            bool isPartial,
-            string? statusMessage,
-            bool isUnsupported,
+            ExplainStreamRequest request,
             string accessToken,
-            string requestId,
-            string usageContext,
             Action<string>? onToken = null,
             Action<string>? onStatus = null,
-            Action? onComplete = null,
-            bool ocrUsed = false,
-            float ocrConfidence = 0f)
+            Action? onComplete = null)
         {
             var streamStopwatch = Stopwatch.StartNew();
             int tokenChunks = 0;
             int tokenChars = 0;
-            string cleanSelectedText = TextSanitizer.SanitizePayloadText(selectedText, 5000);
-            string cleanBackgroundContext = TextSanitizer.SanitizePayloadText(backgroundContext, 12000);
-            string cleanWindowTitle = TextSanitizer.SanitizePayloadText(windowTitle, 400);
-            string cleanProcessName = TextSanitizer.SanitizePayloadText(processName, 100);
-            string cleanStatusMessage = TextSanitizer.SanitizePayloadText(statusMessage, 240);
+            string cleanSelectedText = TextSanitizer.SanitizePayloadText(request.SelectedText, 5000);
+            string cleanBackgroundContext = TextSanitizer.SanitizePayloadText(request.BackgroundContext, 12000);
+            string cleanWindowTitle = TextSanitizer.SanitizePayloadText(request.WindowTitle, 400);
+            string cleanProcessName = TextSanitizer.SanitizePayloadText(request.ProcessName, 100);
+            string cleanStatusMessage = TextSanitizer.SanitizePayloadText(request.StatusMessage, 240);
+            string cleanOcrText = TextSanitizer.SanitizePayloadText(request.OcrText, 12000);
 
             try
             {
-                using var ws = await ConnectWithRetryAsync(accessToken, requestId, cleanSelectedText.Length, cleanBackgroundContext.Length, environmentType, selectedMethod, backgroundMethod, isPartial, isUnsupported);
+                using var ws = await ConnectWithRetryAsync(
+                    accessToken,
+                    request.RequestId,
+                    cleanSelectedText.Length,
+                    cleanBackgroundContext.Length,
+                    request.EnvironmentType,
+                    request.SelectedMethod,
+                    request.BackgroundMethod,
+                    request.IsPartial,
+                    request.IsUnsupported);
                 using var streamCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
                 var payload = new
                 {
-                    request_id         = requestId,
-                    usage_context      = usageContext,
-                    selected_text      = cleanSelectedText,
+                    request_id         = request.RequestId,
+                    usage_context      = request.UsageContext,
+                    selected_text      = string.IsNullOrWhiteSpace(cleanSelectedText) ? null : cleanSelectedText,
                     background_context = cleanBackgroundContext,
+                    ocr_text           = string.IsNullOrWhiteSpace(cleanOcrText) ? null : cleanOcrText,
                     window_title       = cleanWindowTitle,
                     process_name       = cleanProcessName,
-                    environment_type   = environmentType,
-                    selected_method    = selectedMethod,
-                    background_method  = backgroundMethod,
-                    is_partial         = isPartial,
-                    is_unsupported     = isUnsupported,
+                    environment_type   = request.EnvironmentType,
+                    selected_method    = request.SelectedMethod,
+                    background_method  = request.BackgroundMethod,
+                    capture_method_extended = request.CaptureMethodExtended,
+                    is_partial         = request.IsPartial,
+                    is_unsupported     = request.IsUnsupported,
                     status_message     = cleanStatusMessage,
-                    ocr_used           = ocrUsed,
-                    ocr_confidence     = ocrConfidence
+                    ocr_used           = request.OcrUsed,
+                    ocr_confidence     = request.OcrConfidence,
+                    cursor_position    = request.CursorPosition == null
+                        ? null
+                        : new { x = request.CursorPosition.X, y = request.CursorPosition.Y },
+                    vision             = request.Vision == null
+                        ? null
+                        : new
+                        {
+                            cursor_region_base64 = EncodeImage(request.Vision.CursorRegionPng),
+                            active_panel_base64 = EncodeImage(request.Vision.ActivePanelPng),
+                            full_window_base64 = EncodeImage(request.Vision.FullWindowPng)
+                        }
                 };
 
                 string jsonPayload = JsonSerializer.Serialize(payload);
@@ -85,7 +95,7 @@ namespace CodeExplainer
                     WebSocketMessageType.Text,
                     true,
                     streamCts.Token);
-                RuntimeLog.Info("Backend", $"req={requestId} stage=payload_sent");
+                RuntimeLog.Info("Backend", $"req={request.RequestId} stage=payload_sent");
 
                 while (ws.State == WebSocketState.Open)
                 {
@@ -100,7 +110,7 @@ namespace CodeExplainer
                         onToken,
                         onStatus,
                         onComplete,
-                        requestId,
+                        request.RequestId,
                         ref tokenChunks,
                         ref tokenChars);
                     if (!shouldContinue)
@@ -117,12 +127,12 @@ namespace CodeExplainer
                 streamStopwatch.Stop();
                 RuntimeLog.Info(
                     "Backend",
-                    $"req={requestId} stage=stream_finished token_chunks={tokenChunks} token_chars={tokenChars} duration_ms={streamStopwatch.ElapsedMilliseconds}");
+                    $"req={request.RequestId} stage=stream_finished token_chunks={tokenChunks} token_chars={tokenChars} duration_ms={streamStopwatch.ElapsedMilliseconds}");
             }
             catch (Exception ex)
             {
                 streamStopwatch.Stop();
-                RuntimeLog.Error("Backend", $"req={requestId} stage=error message={ex.Message}");
+                RuntimeLog.Error("Backend", $"req={request.RequestId} stage=error message={ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"BackendClient error: {ex.Message}");
                 RunOnUiThread(() =>
                 {
@@ -222,6 +232,16 @@ namespace CodeExplainer
             }
 
             throw new HttpRequestException($"Unable to connect to backend WebSocket. {lastError?.Message}", lastError);
+        }
+
+        private static string? EncodeImage(byte[]? bytes)
+        {
+            if (bytes == null || bytes.Length == 0)
+            {
+                return null;
+            }
+
+            return Convert.ToBase64String(bytes);
         }
 
         private static Uri BuildWebSocketUri(string accessToken)

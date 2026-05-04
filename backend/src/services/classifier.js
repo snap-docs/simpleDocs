@@ -253,3 +253,38 @@ export function classify(selectedText, backgroundContext = '') {
   // Priority 4: Everything else
   return 4;
 }
+
+export function classifyRequest({
+  selectedText = '',
+  backgroundContext = '',
+  ocrText = '',
+  hasVision = false
+} = {}) {
+  const selected = typeof selectedText === 'string' ? selectedText.trim() : '';
+  if (selected.length > 0) {
+    return {
+      caseType: classify(selected, backgroundContext),
+      textSource: 'selected_text'
+    };
+  }
+
+  const ocr = typeof ocrText === 'string' ? ocrText.trim() : '';
+  if (ocr.length > 0) {
+    return {
+      caseType: classify(ocr, backgroundContext),
+      textSource: 'ocr_text'
+    };
+  }
+
+  if (hasVision) {
+    return {
+      caseType: 5,
+      textSource: 'vision_only'
+    };
+  }
+
+  return {
+    caseType: 4,
+    textSource: 'none'
+  };
+}

@@ -22,16 +22,61 @@ The surrounding work added around auth, logging, and deployment does not redesig
 - **Clipboard Compatibility Mode:** safe copy-based fallback for editors and terminal cases
 - **Classic Console Buffer API:** legacy terminal support
 - **Native Windows OCR Engine:** last-resort fallback for canvas, blocked, or visual-only surfaces
+- **Windows.Graphics.Capture:** full active-window capture for layered vision context
+- **Magick.NET:** downsampling and payload shaping for the cursor, panel, and window layers
 
 ## Global Pipeline
 
 1. Detect the active window and process.
 2. Classify the environment.
 3. Route to the matching capture strategy.
-4. Extract selected text using the ordered fallback chain.
-5. Extract background context using the strategy-specific fallback chain.
-6. Build capture metadata including methods, partial/unsupported state, and usage context.
-7. Send the final payload to the backend only after capture completes.
+4. Run the existing text pipeline and the active-window vision capture path in parallel.
+5. Extract selected text using the ordered fallback chain.
+6. Extract background context using the strategy-specific fallback chain.
+7. Capture cursor, panel, and full-window image layers plus OCR text from the full window.
+8. Build one unified payload including methods, partial/unsupported state, usage context, and optional vision layers.
+9. Send the final payload to the backend only after capture completes.
+
+## Dual-Path Architecture
+
+```mermaid
+flowchart TD
+    A["Hotkey Trigger"] --> B["Active Window Detection"]
+    B --> C["Text Capture Pipeline"]
+    B --> D["Vision Capture Pipeline"]
+
+    C --> C1["UIA -> MSAA -> Clipboard -> OCR"]
+    C1 --> C2["selected_text + background_context"]
+
+    D --> D1["Windows.Graphics.Capture full window"]
+    D1 --> D2["Layer 1 cursor crop"]
+    D1 --> D3["Layer 2 panel crop"]
+    D1 --> D4["Layer 3 full-window resize"]
+    D1 --> D5["Layer 4 OCR text"]
+
+    C2 --> E["Unified Request Payload"]
+    D2 --> E
+    D3 --> E
+    D4 --> E
+    D5 --> E
+
+    E --> F["/ws/stream"]
+    F --> G["Text provider path"]
+    F --> H["Anthropic vision path"]
+```
+
+## Vision Layer Rules
+
+- **Layer 1:** `400x300` around the cursor for fine-detail UI understanding
+- **Layer 2:** nearest UIA panel/group/document/custom/window bounds, with a `1200x800` centered fallback
+- **Layer 3:** full active window downsampled to at most `1024x768`
+- **Layer 4:** OCR extracted from the full captured window
+
+The backend uses the same payload envelope for:
+
+- `text_only`
+- `vision_augmented`
+- `vision_only`
 
 ## Selected Text Fallback Order
 

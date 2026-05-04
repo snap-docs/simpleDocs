@@ -7,12 +7,13 @@ This repository contains `simpleDocs`, a Windows-first OS-level assistant that e
 The main architecture is intentionally preserved.
 
 - C# / .NET 8 / WPF desktop client
-- Native Windows capture pipeline using UIA, MSAA, clipboard fallback, console APIs, and OCR
+- Native Windows capture pipeline using UIA, MSAA, clipboard fallback, console APIs, OCR, and layered window screenshots
 - Node.js backend with Hono
 - WebSocket streaming for live responses
 - Hosted Supabase/Postgres for auth and study logging
 - Azure App Service for the hosted backend
-- Groq as the current primary model provider, with OpenRouter available as a backend-side fallback path
+- Groq as the current primary text model provider, with OpenRouter available as a backend-side fallback path
+- Anthropic Claude Sonnet 4 vision routing for multi-layer screenshot understanding
 
 ## Current Product Status
 
@@ -42,6 +43,8 @@ Implemented now:
 - provider-based auth routes now support Google and email/password on the same shared identity model
 - hosted DB connectivity checks are working
 - Groq fallback-key support is implemented in the backend
+- layered vision-augmented capture is implemented for canvas-locked and visual-only apps
+- backend vision routing now accepts cursor, panel, and full-window screenshots on the existing `/ws/stream` path
 
 Current remaining rollout work:
 
@@ -57,12 +60,13 @@ Current remaining rollout work:
 3. The client stores tokens securely on Windows using DPAPI.
 4. The app runs hidden to tray and registers the global hotkey.
 5. The user highlights text and presses the hotkey.
-6. The capture engine extracts selected text and surrounding context.
-7. The client sends the payload to the backend over an authenticated WebSocket.
-8. The backend classifies the request and streams the explanation back in real time.
-9. The overlay renders the response immediately as tokens arrive.
-10. After stream completion, the backend writes one final `request_logs` row to the hosted DB.
-11. The user can submit a single thumbs up or thumbs down reaction for the visible response.
+6. The client runs the existing text capture path and the layered vision capture path in parallel.
+7. The capture engine extracts selected text, surrounding context, OCR text, and up to three image layers.
+8. The client sends the unified payload to the backend over an authenticated WebSocket.
+9. The backend classifies the request and routes text-only traffic to the text model path or vision traffic to Anthropic.
+10. The overlay renders the response immediately as tokens arrive.
+11. After stream completion, the backend writes one final `request_logs` row to the hosted DB.
+12. The user can submit a single thumbs up or thumbs down reaction for the visible response.
 
 ## Current Data Model
 
@@ -94,8 +98,36 @@ Hosted Supabase/Postgres is used for:
 - `total_response_time_ms`
 - `status`
 - `feedback_reaction`
+- `capture_method_extended`
+- `vision_layers_used`
+- `total_image_bytes_sent`
 
 The system no longer stores `session_id`, `is_partial`, `is_unsupported`, or `feedback_at` in the hosted request log table.
+
+## Vision Pipeline
+
+The text pipeline still stays in place and remains the first-class source when OS text extraction works.
+
+The new vision path adds three screenshot layers plus OCR on the active window:
+
+- Layer 1: `400x300` cursor-region detail crop
+- Layer 2: active panel crop from UIA bounds, with a `1200x800` cursor-centered fallback
+- Layer 3: full active window downsampled to at most `1024x768`
+- Layer 4: OCR text extracted from the full captured window
+
+The client sends one shared payload shape with:
+
+- selected text when available
+- background context when available
+- OCR text when available
+- three optional base64 image layers
+- one shared `capture_method_extended` field: `text_only`, `vision_augmented`, or `vision_only`
+
+The backend then keeps one `/ws/stream` entrypoint and decides whether to use:
+
+- the current text model path
+- the Anthropic vision path
+- text fallback when the in-memory vision circuit breaker is open
 
 ## Repository Structure
 
@@ -160,6 +192,7 @@ The main tester entry point is `app\CodeExplainer.exe`.
 cd backend
 npm install
 npm run check
+npm run test:vision
 npm run check:db
 npm run dev
 ```
@@ -170,6 +203,21 @@ npm run dev
 dotnet build client\CodeExplainer.csproj -nologo
 dotnet run --project client\CodeExplainer.csproj
 ```
+
+### Optional vision-debug export
+
+Set `CODE_EXPLAINER_VISION_DEBUG_DIR` to any writable folder before launching the client to save Layer 1, Layer 2, and Layer 3 images for manual inspection during scenario testing.
+
+## Scenario Testing
+
+Use the vision debug export directory for the six manual scenarios:
+
+1. DaVinci Resolve: select timeline text and confirm the saved full-window layer still shows the preview frame.
+2. Google Docs: select document text and confirm the panel/window layers preserve surrounding paragraph context.
+3. Figma: invoke on a layer or canvas element and confirm the panel layer contains the active design region.
+4. Image in browser: invoke on an image and confirm the full-window layer captures the visible image content.
+5. PDF in browser: invoke on rendered PDF text and confirm OCR plus layout context are both present.
+6. Existing IDE case: verify selected text still routes cleanly through the text-first path.
 
 ## Hosted Deployment State
 

@@ -113,6 +113,20 @@ WIDGET OUTPUT RULES (STRICT):
 - Do not treat a plain term as broken code just because the surrounding page mentions code, Git, deployment, or tooling.
 - Output plain sentence flow only.`;
 
+const VISION_SYSTEM_PROMPT = `You are simpleDocs, a contextual developer assistant.
+
+RULES:
+- Combine the image layers and any extracted text into one grounded explanation.
+- Treat Layer 1 as cursor detail, Layer 2 as the active work panel, and Layer 3 as full-application context.
+- If selected text is available, explain that exact selection first and use the images to disambiguate it.
+- If OCR text is available, use it only when it matches what is visually present.
+- Never say "I cannot see".
+- If the screenshot shows an error, use productive failure: explain the issue and give only a directional hint.
+- If the screenshot shows code, explain the code or UI element in context.
+- If the screenshot shows a design, media, or editor workflow, explain what is being edited and what tool or setting is active.
+- Stay concise and overlay-friendly.
+${WIDGET_OUTPUT_RULES}`;
+
 /**
  * Build the prompt messages for OpenRouter.
  * @param {number} caseType - Case 1-4
@@ -162,6 +176,60 @@ export function buildPrompt(caseType, selectedText, backgroundContext, windowTit
   }
 
   return { systemPrompt, userPrompt };
+}
+
+export function buildVisionPrompt({
+  selectedText = '',
+  backgroundContext = '',
+  ocrText = '',
+  processName = '',
+  windowTitle = '',
+  cursorPosition = null,
+  captureMethodExtended = 'vision_only'
+} = {}) {
+  const cleanedSelected = sanitizeSelectedText(selectedText, 5000);
+  const cleanedBackground = sanitizeBackgroundText(backgroundContext, 10000);
+  const cleanedOcr = sanitizeBackgroundText(ocrText, 12000);
+  const cleanedProcessName = sanitizeMetadataText(processName, 100);
+  const cleanedWindowTitle = sanitizeMetadataText(windowTitle, 400);
+  const cursorX = Number.isFinite(cursorPosition?.x) ? cursorPosition.x : '?';
+  const cursorY = Number.isFinite(cursorPosition?.y) ? cursorPosition.y : '?';
+
+  const userPrompt = `The user triggered simpleDocs at screen coordinates (${cursorX}, ${cursorY}).
+
+LAYER GUIDE:
+- Layer 1 is a close cursor-region detail crop.
+- Layer 2 is the active working panel or the nearest panel fallback.
+- Layer 3 is the full active window downsampled for global context.
+
+Application: ${cleanedProcessName || 'unknown'}
+Window: ${cleanedWindowTitle || 'unknown'}
+Capture mode: ${captureMethodExtended}
+
+${cleanedSelected ? `Selected text:
+\`\`\`
+${cleanedSelected}
+\`\`\`
+` : 'Selected text: not available.\n'}
+${cleanedBackground ? `Background context text:
+\`\`\`
+${cleanedBackground}
+\`\`\`
+` : 'Background context text: not available.\n'}
+${cleanedOcr ? `OCR text:
+\`\`\`
+${cleanedOcr}
+\`\`\`
+` : 'OCR text: not available.\n'}
+Task:
+1. Identify what the user selected or focused near the cursor.
+2. Identify the application and current task context.
+3. Explain the visible issue, tool, code, or UI in 3-4 short labeled lines.`;
+
+  return {
+    systemPrompt: VISION_SYSTEM_PROMPT,
+    userPrompt
+  };
 }
 
 function buildEnvironmentRules(caseType, environmentType) {
