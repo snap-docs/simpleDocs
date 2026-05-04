@@ -117,6 +117,29 @@ function bytesFromBase64(data) {
   }
 }
 
+function readPngDimensions(base64Data) {
+  if (!base64Data) {
+    return null;
+  }
+
+  try {
+    const bytes = Buffer.from(base64Data, 'base64');
+    if (bytes.length < 24) {
+      return null;
+    }
+
+    const width = bytes.readUInt32BE(16);
+    const height = bytes.readUInt32BE(20);
+    if (!width || !height) {
+      return null;
+    }
+
+    return { width, height };
+  } catch {
+    return null;
+  }
+}
+
 function listVisionLayers(vision) {
   const layers = [];
   if (vision.cursorRegionBase64) layers.push('cursor');
@@ -125,14 +148,32 @@ function listVisionLayers(vision) {
   return layers;
 }
 
-function estimateVisionCostUsd(totalImageBytes) {
+function estimateVisionCostUsd(vision) {
   const inputCostPerMillion = Number.parseFloat(process.env.ANTHROPIC_INPUT_COST_PER_MILLION_USD || '3');
-  if (!Number.isFinite(inputCostPerMillion) || totalImageBytes <= 0) {
+  if (!Number.isFinite(inputCostPerMillion)) {
     return 0;
   }
 
-  // Heuristic: roughly one input token per ~750 bytes after client-side downsampling/compression.
-  const estimatedInputTokens = Math.ceil(totalImageBytes / 750);
+  const images = [
+    vision.cursorRegionBase64,
+    vision.activePanelBase64,
+    vision.fullWindowBase64
+  ];
+
+  let estimatedInputTokens = 0;
+  for (const image of images) {
+    const dimensions = readPngDimensions(image);
+    if (!dimensions) {
+      continue;
+    }
+
+    estimatedInputTokens += Math.ceil((dimensions.width * dimensions.height) / 750);
+  }
+
+  if (estimatedInputTokens <= 0) {
+    return 0;
+  }
+
   return Number(((estimatedInputTokens / 1_000_000) * inputCostPerMillion).toFixed(6));
 }
 
@@ -351,7 +392,7 @@ export async function handleStreamRequest(data, ws, authUser = null) {
   ws.send(JSON.stringify({ type: 'complete' }));
 
   const totalResponseTimeMs = Date.now() - startTime;
-  const estimatedCostUsd = estimateVisionCostUsd(totalImageBytesSent);
+  const estimatedCostUsd = estimateVisionCostUsd(vision);
   if (requestStatus === 'completed') {
     requestStatus = determineRequestStatus({
       isPartial: Boolean(data.is_partial ?? data.isPartial),
