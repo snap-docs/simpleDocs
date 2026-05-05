@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Reflection;
 using Microsoft.Win32;
 
 namespace CodeExplainer
@@ -85,8 +84,9 @@ namespace CodeExplainer
 
             if (processPath.EndsWith("dotnet.exe", StringComparison.OrdinalIgnoreCase))
             {
-                string? entryAssemblyPath = Assembly.GetEntryAssembly()?.Location;
-                if (string.IsNullOrWhiteSpace(entryAssemblyPath) || !File.Exists(entryAssemblyPath))
+                string assemblyName = typeof(App).Assembly.GetName().Name ?? "CodeExplainer";
+                string entryAssemblyPath = Path.Combine(AppContext.BaseDirectory, $"{assemblyName}.dll");
+                if (!File.Exists(entryAssemblyPath))
                 {
                     throw new InvalidOperationException("Unable to determine the application assembly path for Windows startup.");
                 }

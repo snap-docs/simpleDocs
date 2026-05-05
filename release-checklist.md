@@ -49,12 +49,13 @@
 1. run `./publish-client.ps1 -Configuration Release -Runtime win-x64 -EnvironmentName Production`
 2. confirm output exists in `dist/client/`
 3. confirm `CodeExplainer.exe` opens directly with hosted production settings
-4. run `./prepare-tester-bundle.ps1 -EnvironmentName Production`
+4. run `./prepare-tester-bundle.ps1 -EnvironmentName Production -CreateZip`
 5. confirm output exists in `dist/tester-bundle/`
-6. create the final zip from `dist/tester-bundle/`
-7. confirm the package contains only:
+6. confirm the final zip exists in `dist/simpleDocs-tester-bundle.zip`
+7. confirm the package contains the published runtime files under `app\`, including:
    - `app\CodeExplainer.exe`
    - `app\appsettings.json`
+   - any runtime metadata/native files emitted by `dotnet publish`
    - `docs\final-tester-package-guide.md`
    - `docs\chatgpt-tester-plan-prompt.md`
    - `README-FIRST.txt`

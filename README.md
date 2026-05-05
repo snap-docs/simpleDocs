@@ -178,6 +178,7 @@ Current packaged contents:
 
 - `app\CodeExplainer.exe`
 - `app\appsettings.json`
+- runtime metadata/native files emitted by `dotnet publish` when needed
 - `docs\final-tester-package-guide.md`
 - `docs\chatgpt-tester-plan-prompt.md`
 - `README-FIRST.txt`

@@ -1,7 +1,9 @@
 param(
     [string]$ClientDist = ".\dist\client",
     [string]$OutputRoot = ".\dist\tester-bundle",
-    [string]$EnvironmentName = "Production"
+    [string]$EnvironmentName = "Production",
+    [string]$ZipPath = ".\dist\simpleDocs-tester-bundle.zip",
+    [switch]$CreateZip
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,22 +21,33 @@ if (Test-Path $outputDir) {
 }
 
 New-Item -ItemType Directory -Path $outputDir | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $outputDir "app") | Out-Null
+$appDir = Join-Path $outputDir "app"
+New-Item -ItemType Directory -Path $appDir | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $outputDir "docs") | Out-Null
 
-# Copy only the files testers actually need to run the app.
-$runtimeFiles = @(
+$requiredFiles = @(
     "CodeExplainer.exe",
     "appsettings.json"
 )
 
-foreach ($fileName in $runtimeFiles) {
+foreach ($fileName in $requiredFiles) {
     $sourcePath = Join-Path $clientDistPath $fileName
     if (-not (Test-Path $sourcePath)) {
         throw "Required client file not found: $sourcePath"
     }
+}
 
-    Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $outputDir "app" $fileName) -Force
+$publishedFiles = Get-ChildItem -LiteralPath $clientDistPath -File
+foreach ($file in $publishedFiles) {
+    if ($file.Extension -eq ".pdb") {
+        continue
+    }
+
+    if ($file.Name -like "appsettings.*.json" -and $file.Name -ne "appsettings.json") {
+        continue
+    }
+
+    Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $appDir $file.Name) -Force
 }
 
 if (Test-Path (Join-Path $projectRoot "final-tester-package-guide.md")) {
@@ -60,3 +73,18 @@ Environment: $EnvironmentName
 Set-Content -LiteralPath $readmePath -Value $readme -Encoding ASCII
 
 Write-Host "Tester bundle prepared at $outputDir"
+
+if ($CreateZip.IsPresent) {
+    $zipOutputPath = Join-Path $projectRoot $ZipPath
+    $zipParent = Split-Path -Parent $zipOutputPath
+    if (-not (Test-Path $zipParent)) {
+        New-Item -ItemType Directory -Path $zipParent | Out-Null
+    }
+
+    if (Test-Path $zipOutputPath) {
+        Remove-Item -LiteralPath $zipOutputPath -Force
+    }
+
+    Compress-Archive -Path (Join-Path $outputDir "*") -DestinationPath $zipOutputPath -Force
+    Write-Host "Tester bundle zip prepared at $zipOutputPath"
+}

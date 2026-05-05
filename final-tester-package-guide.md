@@ -16,6 +16,7 @@ After extracting the zip, the folder contains:
 
 - `app\CodeExplainer.exe`
 - `app\appsettings.json`
+- any runtime metadata/native files required by the published Windows build
 - `docs\final-tester-package-guide.md`
 - `docs\chatgpt-tester-plan-prompt.md`
 - `README-FIRST.txt`
