@@ -58,7 +58,7 @@ This document tracks the current implementation status of the deployment-ready s
 
 1. run the latest package on a clean Windows machine
 2. run a short internal pilot with real users
-3. confirm the support and issue-triage process
+3. review and use `pilot-support-runbook.md` for support and issue triage
 4. rotate temporary development secrets before broader rollout
 
 ### Medium priority

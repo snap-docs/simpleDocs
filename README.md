@@ -259,6 +259,7 @@ Remaining operational validation:
 - `release-checklist.md`: release and verification checklist
 - `final-tester-package-guide.md`: tester-facing package guide
 - `pilot-user-guide.md`: short tester usage guide
+- `pilot-support-runbook.md`: internal support and issue-triage workflow
 - `balancework.md`: remaining rollout work after current implementation
 - `CAPTURE_PIPELINE.md`: current capture architecture reference
 - `classifier-explained.md`: how `is_partial` and `task_type` are produced

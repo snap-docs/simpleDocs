@@ -100,6 +100,7 @@ After one successful hosted test request, confirm these DB effects:
 - tester guide is packaged
 - sign-in method provisioning is tracked for the pilot group
 - privacy/support contact is prepared
+- `pilot-support-runbook.md` is reviewed and ready for issue triage
 - internal pilot users are selected
 - development keys are rotated if necessary
 

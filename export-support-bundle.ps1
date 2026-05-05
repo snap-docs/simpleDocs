@@ -26,7 +26,8 @@ $pathsToCopy = @(
     "client\appsettings.Staging.json",
     "client\appsettings.Production.json",
     "release-checklist.md",
-    "launch-docs.md"
+    "launch-docs.md",
+    "pilot-support-runbook.md"
 )
 
 foreach ($relativePath in $pathsToCopy) {
