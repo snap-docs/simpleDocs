@@ -15,16 +15,16 @@
 - save/apply the settings
 - restart the Azure Web App
 - confirm `https://<your-app>/api/health` returns `ok`
-- confirm `POST /auth/redeem-code` returns tokens for a fresh redeem code
-- confirm Google auth variables are configured before enabling Google sign-in in production:
+- confirm Google auth variables are configured before enabling Google-first sign-in in production:
   - `GOOGLE_CLIENT_ID`
   - `GOOGLE_CLIENT_SECRET` if required by the app registration
   - `AUTH_FLOW_TOKEN_SECRET`
+- if legacy redeem-code support remains enabled for the pilot, confirm the redeem-code login route still works for support-managed accounts
 
 ## 2. Database Readiness
 
 - confirm migration SQL is applied in the hosted DB
-- confirm redeem codes exist in `redeem_codes`
+- if legacy redeem-code support remains enabled, confirm support-managed redeem codes exist in `redeem_codes`
 - run `npm run check:db`
 - confirm these tables are reachable:
   - `participants`
@@ -70,8 +70,8 @@
 
 ## 5. Functional Verification
 
-- redeem-code login works against the hosted backend
-- Google sign-in works if Google auth is enabled for the release
+- Google sign-in works against the hosted backend
+- if legacy redeem-code support remains enabled, redeem-code login still works for support-managed accounts
 - email/password sign-up and sign-in work if email/password is enabled for the release
 - access token refresh works after restart
 - logout works

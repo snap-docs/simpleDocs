@@ -116,7 +116,7 @@
                                    Text="simpleDocs account" />
                         <TextBlock Foreground="{StaticResource TextMutedBrush}"
                                    FontSize="11"
-                                   Text="Link more sign-in methods" />
+                                   Text="Link backup sign-in methods" />
                     </StackPanel>
                 </StackPanel>
 
@@ -191,35 +191,6 @@
                         </Border>
                     </TabItem>
 
-                    <TabItem Header="Redeem code">
-                        <Border Margin="0,14,0,0"
-                                Padding="18"
-                                Background="{StaticResource PanelBrush}"
-                                BorderBrush="#2B405D"
-                                BorderThickness="1"
-                                CornerRadius="10">
-                            <StackPanel>
-                                <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
-                                           Text="Link a redeem code" />
-
-                                <TextBlock Margin="0,16,0,6"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           FontSize="12"
-                                           Text="Redeem code" />
-                                <TextBox x:Name="RedeemCodeTextBox"
-                                         Style="{StaticResource FieldTextBoxStyle}" />
-
-                                <Button Margin="0,18,0,0"
-                                        HorizontalAlignment="Left"
-                                        Click="RedeemCodeLinkButton_Click"
-                                        Content="Link redeem code"
-                                        Style="{StaticResource PrimaryButtonStyle}" />
-                            </StackPanel>
-                        </Border>
-                    </TabItem>
-
                     <TabItem Header="Email/password">
                         <Border Margin="0,14,0,0"
                                 Padding="18"
@@ -247,7 +218,7 @@
                                 <TextBox x:Name="EmailTextBox"
                                          Style="{StaticResource FieldTextBoxStyle}" />
 
-                                <TextBlock Margin="0,14,0,6"
+                                <TextBlock Margin="0,16,0,6"
                                            Foreground="{StaticResource TextMutedBrush}"
                                            FontSize="12"
                                            Text="Password" />
@@ -258,6 +229,39 @@
                                         HorizontalAlignment="Left"
                                         Click="EmailLinkButton_Click"
                                         Content="Link email/password"
+                                        Style="{StaticResource PrimaryButtonStyle}" />
+                            </StackPanel>
+                        </Border>
+                    </TabItem>
+
+                    <TabItem Header="Redeem code (legacy)">
+                        <Border Margin="0,14,0,0"
+                                Padding="18"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="#2B405D"
+                                BorderThickness="1"
+                                CornerRadius="10">
+                            <StackPanel>
+                                <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Text="Link a redeem code" />
+                                <TextBlock Margin="0,8,0,0"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="13"
+                                           Text="Keep this only for legacy or support-managed access while the account moves to Google-first sign-in." />
+
+                                <TextBlock Margin="0,16,0,6"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="12"
+                                           Text="Redeem code" />
+                                <TextBox x:Name="RedeemCodeTextBox"
+                                         Style="{StaticResource FieldTextBoxStyle}" />
+
+                                <Button Margin="0,18,0,0"
+                                        HorizontalAlignment="Left"
+                                        Click="RedeemCodeLinkButton_Click"
+                                        Content="Link redeem code"
                                         Style="{StaticResource PrimaryButtonStyle}" />
                             </StackPanel>
                         </Border>

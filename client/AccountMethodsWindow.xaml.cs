@@ -69,7 +69,7 @@ namespace CodeExplainer
             if (string.IsNullOrWhiteSpace(code))
             {
                 SetError("Enter a redeem code to link it to this account.");
-                ProviderTabs.SelectedIndex = 1;
+                ProviderTabs.SelectedIndex = 2;
                 return;
             }
 
@@ -87,7 +87,7 @@ namespace CodeExplainer
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
             {
                 SetError("Enter an email address and password to link this method.");
-                ProviderTabs.SelectedIndex = 2;
+                ProviderTabs.SelectedIndex = 1;
                 return;
             }
 

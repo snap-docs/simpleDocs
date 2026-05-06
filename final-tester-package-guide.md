@@ -32,11 +32,9 @@ The main file the tester should use is:
 3. Open the `app` folder.
 4. Double-click `CodeExplainer.exe`.
 5. If Windows shows a security prompt, choose the option to continue if the tester trusts the app source.
-6. Sign in with the method your team provided:
-   - redeem code
-   - Google
-   - email and password
-7. Wait until the tray icon shows the app is ready.
+6. Sign in with the method your team provided.
+7. Google should be treated as the default sign-in path unless support told the tester to use a legacy redeem code or an email/password account.
+8. Wait until the tray icon shows the app is ready.
 
 ## Daily use after first sign-in
 
@@ -127,4 +125,4 @@ Ask them to report:
 
 ## Recommended message you can send to testers
 
-Extract the zip first, then open `app\CodeExplainer.exe`. Sign in once with the method we provided for your account. After that, you can keep using the same app folder and open the exe whenever you want. The app also starts automatically with Windows by default, and you can change that later from the tray menu.
+Extract the zip first, then open `app\CodeExplainer.exe`. Sign in once with the method we provided for your account. Google is the default path unless we told you to use a legacy redeem code or email/password. After that, you can keep using the same app folder and open the exe whenever you want. The app also starts automatically with Windows by default, and you can change that later from the tray menu.

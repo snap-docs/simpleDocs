@@ -10,6 +10,7 @@ namespace CodeExplainer
         public LoginWindow()
         {
             InitializeComponent();
+            ProviderTabs.SelectedIndex = 0;
         }
 
         public void SetError(string message)
@@ -34,7 +35,7 @@ namespace CodeExplainer
             if (string.IsNullOrWhiteSpace(code))
             {
                 SetError("Enter your redeem code to continue.");
-                ProviderTabs.SelectedIndex = 0;
+                ProviderTabs.SelectedIndex = 2;
                 return;
             }
 

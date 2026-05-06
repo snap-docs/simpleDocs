@@ -115,7 +115,7 @@
                                    Text="simpleDocs" />
                         <TextBlock Foreground="{StaticResource TextMutedBrush}"
                                    FontSize="11"
-                                   Text="Choose a sign-in method" />
+                                   Text="Google-first sign-in" />
                     </StackPanel>
                 </StackPanel>
 
@@ -134,7 +134,7 @@
                 <TextBlock Margin="0,10,0,0"
                            Foreground="{StaticResource TextMutedBrush}"
                            FontSize="14"
-                           Text="Use your redeem code, continue with Google, or sign in with email and password." />
+                           Text="Continue with Google, or use email/password or a support-provided redeem code if your team asked you to." />
             </StackPanel>
 
             <Grid x:Name="FormContentGrid"
@@ -143,39 +143,6 @@
                 <TabControl x:Name="ProviderTabs"
                             Background="Transparent"
                             BorderThickness="0">
-                    <TabItem Header="Redeem code">
-                        <Border Margin="0,14,0,0"
-                                Padding="18"
-                                Background="{StaticResource PanelBrush}"
-                                BorderBrush="#2B405D"
-                                BorderThickness="1"
-                                CornerRadius="10">
-                            <StackPanel>
-                                <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
-                                           Text="Continue with a redeem code" />
-                                <TextBlock Margin="0,8,0,0"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           FontSize="13"
-                                           Text="Existing redeem-code users can keep the same sign-in path." />
-
-                                <TextBlock Margin="0,18,0,6"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           FontSize="12"
-                                           Text="Redeem code" />
-                                <TextBox x:Name="RedeemCodeTextBox"
-                                         Style="{StaticResource FieldTextBoxStyle}" />
-
-                                <Button Margin="0,18,0,0"
-                                        HorizontalAlignment="Left"
-                                        Click="RedeemCodeContinueButton_Click"
-                                        Content="Continue with redeem code"
-                                        Style="{StaticResource PrimaryButtonStyle}" />
-                            </StackPanel>
-                        </Border>
-                    </TabItem>
-
                     <TabItem Header="Google">
                         <Border Margin="0,14,0,0"
                                 Padding="18"
@@ -303,6 +270,39 @@
                                     </StackPanel>
                                 </TabItem>
                             </TabControl>
+                        </Border>
+                    </TabItem>
+
+                    <TabItem Header="Redeem code (legacy)">
+                        <Border Margin="0,14,0,0"
+                                Padding="18"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="#2B405D"
+                                BorderThickness="1"
+                                CornerRadius="10">
+                            <StackPanel>
+                                <TextBlock Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Text="Continue with a redeem code" />
+                                <TextBlock Margin="0,8,0,0"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="13"
+                                           Text="Use this only if your team gave you a redeem code for a legacy or support-managed account." />
+
+                                <TextBlock Margin="0,18,0,6"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="12"
+                                           Text="Redeem code" />
+                                <TextBox x:Name="RedeemCodeTextBox"
+                                         Style="{StaticResource FieldTextBoxStyle}" />
+
+                                <Button Margin="0,18,0,0"
+                                        HorizontalAlignment="Left"
+                                        Click="RedeemCodeContinueButton_Click"
+                                        Content="Continue with redeem code"
+                                        Style="{StaticResource PrimaryButtonStyle}" />
+                            </StackPanel>
                         </Border>
                     </TabItem>
                 </TabControl>

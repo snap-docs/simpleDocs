@@ -7,7 +7,7 @@ Use this runbook during the internal pilot whenever a tester reports a sign-in, 
 Collect these fields before debugging:
 
 - tester name or tester code
-- sign-in method used: redeem code, Google, or email/password
+- sign-in method used: Google, email/password, or legacy redeem code
 - approximate local time of the issue
 - Windows version if known
 - app version or package zip name
@@ -32,7 +32,7 @@ Do not ask testers to send access tokens, refresh tokens, API keys, database cre
 Classify the issue before changing code:
 
 - `package`: app missing files, zip not extracted, wrong package version, Windows blocked launch
-- `auth`: sign-in failed, used redeem code, session restore failed, logout/refresh issue
+- `auth`: sign-in failed, used Google, email/password, or a legacy redeem code, session restore failed, logout/refresh issue
 - `startup`: tray missing, auto-start failed, app exits before ready
 - `hotkey`: no hotkey registration, conflicting shortcut, no response after hotkey
 - `capture`: overlay appears but selected/background text is wrong or missing
@@ -79,7 +79,7 @@ For every issue, record:
 - whether it was user setup, package, backend, auth, capture, model/provider, or DB
 - exact fix or workaround
 - whether a new package is required
-- whether the tester needs a fresh redeem code or account action
+- whether the tester needs a fresh legacy redeem code, a Google account action, or another account action
 
 ## Escalation Rules
 
