@@ -10,7 +10,6 @@ namespace CodeExplainer
         public LoginWindow()
         {
             InitializeComponent();
-            ProviderTabs.SelectedIndex = 0;
         }
 
         public void SetError(string message)
@@ -21,30 +20,85 @@ namespace CodeExplainer
                 : Visibility.Visible;
         }
 
-        public void SetBusy(bool isBusy)
+        public void SetBusy(bool isBusy, string? message = null)
         {
-            BusyText.Text = isBusy ? "Working..." : string.Empty;
+            BusyText.Text = isBusy ? (message ?? "Working...") : string.Empty;
             BusyText.Visibility = isBusy ? Visibility.Visible : Visibility.Collapsed;
             FormContentGrid.IsEnabled = !isBusy;
             CancelButton.IsEnabled = !isBusy;
         }
 
-        private void RedeemCodeContinueButton_Click(object sender, RoutedEventArgs e)
-        {
-            string code = RedeemCodeTextBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(code))
-            {
-                SetError("Enter your redeem code to continue.");
-                ProviderTabs.SelectedIndex = 2;
-                return;
-            }
+        // Panel toggles
 
-            Submit(new AuthWindowSubmission
-            {
-                Kind = AuthWindowSubmissionKind.RedeemCodeLogin,
-                Code = code
-            });
+        private void ShowSignInPanel_Click(object sender, RoutedEventArgs e)
+        {
+            SignInPanel.Visibility = Visibility.Visible;
+            RegisterPanel.Visibility = Visibility.Collapsed;
+            SetError(string.Empty);
         }
+
+        private void ShowRegisterPanel_Click(object sender, RoutedEventArgs e)
+        {
+            SignInPanel.Visibility = Visibility.Collapsed;
+            RegisterPanel.Visibility = Visibility.Visible;
+            SetError(string.Empty);
+        }
+
+        private void RedeemCodeToggle_Click(object sender, RoutedEventArgs e)
+        {
+            bool isVisible = RedeemCodePanel.Visibility == Visibility.Visible;
+            RedeemCodePanel.Visibility = isVisible ? Visibility.Collapsed : Visibility.Visible;
+            RedeemToggleButton.Content = isVisible ? "Have a support code?" : "Hide support code ↑";
+        }
+
+        // Keyboard Enter navigation
+
+        private void SignInEmailField_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                EmailSignInPasswordBox.Focus();
+                e.Handled = true;
+            }
+        }
+
+        private void SignInPasswordField_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                EmailSignInButton_Click(sender, e);
+                e.Handled = true;
+            }
+        }
+
+        private void RegisterEmailField_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                EmailRegisterPasswordBox.Focus();
+                e.Handled = true;
+            }
+        }
+
+        private void RegisterPasswordField_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                EmailRegisterButton_Click(sender, e);
+                e.Handled = true;
+            }
+        }
+
+        private void RedeemCodeField_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                RedeemCodeContinueButton_Click(sender, e);
+                e.Handled = true;
+            }
+        }
+
+        // Submit handlers
 
         private void GoogleContinueButton_Click(object sender, RoutedEventArgs e)
         {
@@ -58,11 +112,10 @@ namespace CodeExplainer
         {
             string email = EmailSignInEmailTextBox.Text.Trim();
             string password = EmailSignInPasswordBox.Password;
+
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
             {
                 SetError("Enter both your email and password to continue.");
-                ProviderTabs.SelectedIndex = 2;
-                EmailModeTabs.SelectedIndex = 0;
                 return;
             }
 
@@ -78,11 +131,10 @@ namespace CodeExplainer
         {
             string email = EmailRegisterEmailTextBox.Text.Trim();
             string password = EmailRegisterPasswordBox.Password;
+
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
             {
-                SetError("Enter an email address and password to create your account.");
-                ProviderTabs.SelectedIndex = 2;
-                EmailModeTabs.SelectedIndex = 1;
+                SetError("Enter an email and password to create your account.");
                 return;
             }
 
@@ -92,6 +144,23 @@ namespace CodeExplainer
                 Email = email,
                 Password = password,
                 DisplayName = EmailRegisterDisplayNameTextBox.Text.Trim()
+            });
+        }
+
+        private void RedeemCodeContinueButton_Click(object sender, RoutedEventArgs e)
+        {
+            string code = RedeemCodeTextBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                SetError("Enter your support code to continue.");
+                return;
+            }
+
+            Submit(new AuthWindowSubmission
+            {
+                Kind = AuthWindowSubmissionKind.RedeemCodeLogin,
+                Code = code
             });
         }
 
@@ -114,9 +183,7 @@ namespace CodeExplainer
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ButtonState == MouseButtonState.Pressed)
-            {
                 DragMove();
-            }
         }
     }
 }
