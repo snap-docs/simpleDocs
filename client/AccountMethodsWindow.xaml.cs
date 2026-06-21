@@ -63,13 +63,19 @@ namespace CodeExplainer
             });
         }
 
+        private void RedeemCodeToggle_Click(object sender, RoutedEventArgs e)
+        {
+            bool isVisible = RedeemCodePanel.Visibility == Visibility.Visible;
+            RedeemCodePanel.Visibility = isVisible ? Visibility.Collapsed : Visibility.Visible;
+            RedeemToggleButton.Content = isVisible ? "Have a support code?" : "Hide support code ↑";
+        }
+
         private void RedeemCodeLinkButton_Click(object sender, RoutedEventArgs e)
         {
             string code = RedeemCodeTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(code))
             {
                 SetError("Enter a redeem code to link it to this account.");
-                ProviderTabs.SelectedIndex = 2;
                 return;
             }
 
@@ -87,7 +93,6 @@ namespace CodeExplainer
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
             {
                 SetError("Enter an email address and password to link this method.");
-                ProviderTabs.SelectedIndex = 1;
                 return;
             }
 

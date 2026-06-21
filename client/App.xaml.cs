@@ -498,10 +498,22 @@ namespace CodeExplainer
         private async Task<bool> PromptForLoginAsync(string reason)
         {
             RuntimeLog.Info("Auth", reason);
+            bool isFirstPrompt = true;
             while (true)
             {
                 var loginWindow = new LoginWindow();
-                loginWindow.SetError(reason);
+                if (isFirstPrompt)
+                {
+                    // The opening message is guidance ("sign in to continue"),
+                    // not a failure, so present it in a neutral style.
+                    loginWindow.SetInfo(reason);
+                    isFirstPrompt = false;
+                }
+                else
+                {
+                    loginWindow.SetError(reason);
+                }
+
                 bool? result = loginWindow.ShowDialog();
                 if (result != true || loginWindow.Submission == null)
                 {

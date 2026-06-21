@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace CodeExplainer
 {
@@ -14,6 +15,18 @@ namespace CodeExplainer
 
         public void SetError(string message)
         {
+            ErrorText.Foreground = (Brush)FindResource("ErrorBrush");
+            ErrorText.Text = message;
+            ErrorText.Visibility = string.IsNullOrWhiteSpace(message)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+
+        // Neutral, informational variant of the message line. Used for the
+        // initial sign-in prompt so it does not look like a failure.
+        public void SetInfo(string message)
+        {
+            ErrorText.Foreground = (Brush)FindResource("TextMutedBrush");
             ErrorText.Text = message;
             ErrorText.Visibility = string.IsNullOrWhiteSpace(message)
                 ? Visibility.Collapsed
