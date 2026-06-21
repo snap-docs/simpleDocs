@@ -26,6 +26,7 @@ export function validateRuntimeConfig(environmentName = 'development') {
   const accessTokenSecret = explicitAccessTokenSecret || fallbackJwtSecret;
   const explicitFlowTokenSecret = process.env.AUTH_FLOW_TOKEN_SECRET;
   const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
   const visionEnabled = process.env.ENABLE_VISION_PIPELINE !== 'false';
 
@@ -50,6 +51,9 @@ export function validateRuntimeConfig(environmentName = 'development') {
 
   if (isProtectedMode && (isBlank(googleClientId) || isPlaceholder(googleClientId))) {
     warnings.push('GOOGLE_CLIENT_ID is missing. Google sign-in cannot complete in protected auth mode.');
+  }
+  else if (isProtectedMode && (isBlank(googleClientSecret) || isPlaceholder(googleClientSecret))) {
+    warnings.push('GOOGLE_CLIENT_SECRET is missing. Google sign-in will fail with invalid_client for Web-application OAuth clients (leave unset only for Desktop-app client type with PKCE).');
   }
 
   if (visionEnabled && (isBlank(anthropicApiKey) || isPlaceholder(anthropicApiKey))) {
