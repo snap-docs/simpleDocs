@@ -12,8 +12,19 @@ const SYSTEM_PROMPTS = {
 
 RULES:
 - Explain what the selected code does
-- Explain briefly how it works
-- Mention the main concept when helpful
+- Explain briefly how it works in this language/framework context
+- Mention the main concept only when it helps understanding
+- Go one level deeper than a basic paraphrase
+- Do not just restate syntax in simpler words
+- Prefer explaining role, behavior, and effect
+- If the selected text is one line from a larger block, explain what that line is doing and why it matters in the local flow
+- If background shows nearby declarations, function body, or class members, use that to explain the selected text more accurately
+- If the selected text contains multiple important built-ins, methods, properties, entries, or chained calls, explain the important ones one by one on separate short lines
+- In that case, use the actual item name as the label when possible, but keep the label simple and overlay-friendly
+- Good labels: Select, Where, AddOpenApi, SwaggerGen, display, inline block
+- Avoid code punctuation-heavy labels like ".Select(" or "obj.method():" as the label
+- If the selection includes a framework annotation, decorator, attribute, built-in helper, or standard API such as @GetMapping, @PostMapping, ResponseEntity, PathVariable, Select, map, filter, or Promise, include one short line labeled "Builtin:" or "Framework:" that explains that item directly
+- For Java/Spring annotations like @GetMapping, explain that it maps HTTP GET requests to the method
 - Focus only on the selected text
 - Use background context only to clarify selected text
 - If language is clear, explain using that language context
@@ -52,6 +63,7 @@ RULES:
 - Suggest what to check next, briefly
 - Focus only on the selected text
 - Use background only when it directly supports the selected text
+- Do not force an error explanation if the selected terminal text is just a normal command or normal output
 - Use short, context-based titles instead of a fixed template`,
 
   4: `You are a technical jargon explainer.
@@ -59,6 +71,9 @@ RULES:
 RULES:
 - Explain the selected text meaning in plain English
 - Highlight the key idea briefly
+- If the selected text comes from docs, browser content, or prose, explain the meaning and practical point
+- Do not force Issue, Cause, or Hint unless the selected text itself clearly shows an error or warning
+- For browser/docs selections, prefer titles like Meaning, Context, Effect, Purpose, or Note
 - Focus only on the selected text
 - Use simple and direct wording
 - Use short, context-based titles instead of a fixed template`
@@ -69,6 +84,7 @@ WIDGET OUTPUT RULES (STRICT):
 - This response is shown in a very small overlay widget.
 - Return 3 short sentences in most cases. You may use 4 short sentences when needed.
 - Return 3 short lines in most cases. You may use 4 short lines when needed.
+- Use 2 short lines only when the selected text is extremely small and extra detail would be filler.
 - Keep each sentence short, clear, and readable.
 - Do not use bullet points.
 - Do not use numbered lists.
@@ -77,6 +93,11 @@ WIDGET OUTPUT RULES (STRICT):
 - Titles must match the context (for example: Selector, Behavior, Layout, Impact, Issue, Cause, Hint, Check).
 - Do not force the same title set for every response.
 - If the selected text contains an error, include an "Issue:" line first.
+- If the selected text is normal code, do not force "Issue" or "Hint".
+- If the selected text is browser/docs/prose, do not force "Issue", "Cause", or "Hint" unless the text itself clearly expresses a problem.
+- If normal code contains multiple important parts, you may explain them one by one with short item labels.
+- When doing that, keep each item to one short sentence and only include the most important parts.
+- If a framework or built-in item is visibly important, prefer a label like "Builtin:" or "Framework:" for that line.
 - Keep one sentence per line after each label.
 - Do not use large paragraph blocks.
 - Do not use long dense text.
@@ -86,6 +107,8 @@ WIDGET OUTPUT RULES (STRICT):
 - Background context is support only, never the main subject.
 - If context is missing, say that briefly in one short sentence.
 - If the selected text is a normal word or short phrase from prose or docs, explain its meaning directly.
+- For code, prefer explaining purpose and effect over obvious syntax narration.
+- For code, make the explanation useful to someone who already knows basic syntax.
 - Do not invent an error, warning, or code problem unless the selected text itself clearly shows one.
 - Do not treat a plain term as broken code just because the surrounding page mentions code, Git, deployment, or tooling.
 - Output plain sentence flow only.`;
@@ -102,7 +125,8 @@ WIDGET OUTPUT RULES (STRICT):
  */
 export function buildPrompt(caseType, selectedText, backgroundContext, windowTitle, processName, environmentType, ocrUsed = false, ocrConfidence = 0) {
   const baseSystemPrompt = SYSTEM_PROMPTS[caseType] || SYSTEM_PROMPTS[4];
-  const systemPrompt = `${baseSystemPrompt}\n${WIDGET_OUTPUT_RULES}`;
+  const environmentRules = buildEnvironmentRules(caseType, environmentType);
+  const systemPrompt = `${baseSystemPrompt}\n${environmentRules}\n${WIDGET_OUTPUT_RULES}`;
 
   // Sanitize background before sending it to the model to avoid wasting tokens on UI glyphs.
   const cleanedBackground = sanitizeBackgroundText(backgroundContext, 10000);
@@ -138,4 +162,36 @@ export function buildPrompt(caseType, selectedText, backgroundContext, windowTit
   }
 
   return { systemPrompt, userPrompt };
+}
+
+function buildEnvironmentRules(caseType, environmentType) {
+  const isBrowser = environmentType === 'browser_chromium' || environmentType === 'browser_firefox';
+  const isIde = environmentType === 'ide_editor';
+
+  if (caseType === 2) {
+    return `ENVIRONMENT-SPECIFIC RULES:
+- Only use error framing when the selected text itself clearly contains an error, invalid syntax, stack trace, or broken construct.
+- If the selected text is from a browser page and reads like docs, prose, or a concept explanation, do not force error framing just because the surrounding topic is technical.`;
+  }
+
+  if (isBrowser) {
+    return `ENVIRONMENT-SPECIFIC RULES:
+- The selection comes from a browser-like surface.
+- Treat normal page text, docs, and article snippets as explanatory content, not as broken code.
+- Prefer meaning, context, and practical effect.
+- Do not add a fix hint unless the selected text itself is clearly an error or warning.`;
+  }
+
+  if (isIde && caseType === 1) {
+    return `ENVIRONMENT-SPECIFIC RULES:
+- The selection comes from an IDE editor.
+- Assume the user can already read basic syntax.
+- Explain the code's role in the surrounding flow, what state or behavior it affects, and why this line or block matters.
+- If the selection contains several notable identifiers or built-ins, break them into separate labeled lines instead of compressing them into one vague sentence.
+- If a framework annotation or built-in is visible, mention it explicitly instead of only describing the surrounding method in general terms.`;
+  }
+
+  return `ENVIRONMENT-SPECIFIC RULES:
+- Stay tightly focused on the selected text.
+- Use background only to make the explanation more accurate, not broader.`;
 }

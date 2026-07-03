@@ -342,7 +342,7 @@ namespace CodeExplainer.Engine.Strategies
             TryAddEditorBackgroundCandidate(
                 candidates,
                 window,
-                (int limit, out string text) => UiAutomationCapture.TryGetNeighborLinesViaTextRange(limit, 14, 14, out text),
+                (int limit, out string text) => UiAutomationCapture.TryGetNeighborLinesViaTextRange(limit, 40, 40, out text),
                 maxChars,
                 selectedTextHint,
                 CaptureMethod.IdeContextTextRange,

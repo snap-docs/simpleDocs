@@ -1,6 +1,9 @@
 import { Hono } from 'hono';
 import { classify } from '../services/classifier.js';
 import { buildPrompt } from '../services/promptEngine.js';
+import { getModelName as getGeminiModelName } from '../services/geminiClient.js';
+import { getModelName as getGroqModelName } from '../services/groqClient.js';
+import { getModelName as getOpenRouterModelName } from '../services/openRouterClient.js';
 import { validateExplainRequest } from '../middleware/validate.js';
 import { logger } from '../utils/logger.js';
 
@@ -34,7 +37,7 @@ export function createExplainRoute() {
       environment_type);
 
     const responseTimeMs = Date.now() - startTime;
-    const modelUsed = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-haiku';
+    const modelUsed = getConfiguredModelName(process.env.AI_PROVIDER);
 
     return c.json({
       case: caseType,
@@ -53,4 +56,17 @@ export function createExplainRoute() {
   });
 
   return route;
+}
+
+function getConfiguredModelName(providerName) {
+  switch ((providerName || '').trim().toLowerCase()) {
+    case 'gemini':
+    case 'google':
+      return getGeminiModelName();
+    case 'groq':
+      return getGroqModelName();
+    case 'openrouter':
+    default:
+      return getOpenRouterModelName();
+  }
 }

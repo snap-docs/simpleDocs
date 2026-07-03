@@ -18,9 +18,11 @@ function isPlaceholder(value) {
 export function validateRuntimeConfig(environmentName = 'development') {
   const warnings = [];
   const isProtectedMode = process.env.SKIP_AUTH !== 'true';
+  const provider = (process.env.AI_PROVIDER || 'openrouter').trim().toLowerCase();
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const anonKey = process.env.SUPABASE_ANON_KEY;
+  const geminiApiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
   const explicitAccessTokenSecret = process.env.ACCESS_TOKEN_SECRET;
   const fallbackJwtSecret = process.env.SUPABASE_JWT_SECRET;
   const accessTokenSecret = explicitAccessTokenSecret || fallbackJwtSecret;
@@ -46,6 +48,10 @@ export function validateRuntimeConfig(environmentName = 'development') {
 
   if (!serviceRoleKey && anonKey) {
     warnings.push('Using SUPABASE_ANON_KEY fallback for DB access. This is not recommended for deployment.');
+  }
+
+  if (provider === 'gemini' && (isBlank(geminiApiKey) || isPlaceholder(geminiApiKey))) {
+    warnings.push('GEMINI_API_KEY or GOOGLE_API_KEY is missing while AI_PROVIDER=gemini.');
   }
 
   if (warnings.length === 0) {

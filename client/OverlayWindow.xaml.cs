@@ -17,6 +17,7 @@ namespace CodeExplainer
         private static readonly Brush PositiveForegroundBrush = CreateBrush("#8FE388");
         private static readonly Brush NegativeForegroundBrush = CreateBrush("#FF9A8A");
         private static readonly Brush TitleForegroundBrush = CreateBrush("#9FC3FF");
+        private static readonly Brush BuiltinForegroundBrush = CreateBrush("#7FE7D8");
         private static readonly Brush StatusNormalBrush = CreateBrush("#80FFFFFF");
         private static readonly Brush StatusWarningBrush = CreateBrush("#F0C987");
         private static readonly Brush StatusErrorBrush = CreateBrush("#FF9A8A");
@@ -318,6 +319,11 @@ namespace CodeExplainer
             if (normalized.Contains("hint") || normalized.Contains("check") || normalized.Contains("warning"))
             {
                 return StatusWarningBrush;
+            }
+
+            if (normalized.Contains("builtin") || normalized.Contains("framework") || normalized.Contains("annotation"))
+            {
+                return BuiltinForegroundBrush;
             }
 
             if (normalized.Contains("done") || normalized.Contains("success"))

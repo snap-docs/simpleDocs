@@ -8,6 +8,7 @@ import { classify } from './classifier.js';
 import { buildPrompt } from './promptEngine.js';
 import * as openRouterClient from './openRouterClient.js';
 import * as groqClient from './groqClient.js';
+import * as geminiClient from './geminiClient.js';
 import { logCompletedRequest } from '../db/requestLogs.js';
 import { sanitizeBackgroundText, sanitizeSelectedText, sanitizeMetadataText } from '../utils/textSanitizer.js';
 import { logger } from '../utils/logger.js';
@@ -92,7 +93,7 @@ export async function handleStreamRequest(data, ws, authUser = null) {
     cleanOcrUsed,
     cleanOcrConfidence);
 
-  const provider = process.env.AI_PROVIDER === 'groq' ? groqClient : openRouterClient;
+  const provider = getProviderClient(process.env.AI_PROVIDER);
   const ocrSuffix = cleanOcrUsed ? ` | OCR(${Math.round(cleanOcrConfidence * 100)}%)` : '';
   const metaLabel = `${cleanEnvironmentType} | ${cleanSelectedMethod} + ${cleanBackgroundMethod}${is_partial ? ' | partial' : ''}${ocrSuffix}`;
   ws.send(JSON.stringify({
@@ -149,6 +150,19 @@ export async function handleStreamRequest(data, ws, authUser = null) {
   });
 
   logger.info(`[WS] Complete in ${totalResponseTimeMs}ms`);
+}
+
+function getProviderClient(providerName) {
+  switch ((providerName || '').trim().toLowerCase()) {
+    case 'gemini':
+    case 'google':
+      return geminiClient;
+    case 'groq':
+      return groqClient;
+    case 'openrouter':
+    default:
+      return openRouterClient;
+  }
 }
 
 function mapTaskType(caseType) {
