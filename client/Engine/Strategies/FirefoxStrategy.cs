@@ -19,9 +19,9 @@ namespace CodeExplainer.Engine.Strategies
                 _compatibilityMode,
                 preferMsaaFirst: true);
 
-            CapturePipelines.BackgroundCaptureOutcome background = CapturePipelines.CaptureFirefoxBackground(
+            CapturePipelines.BackgroundCaptureOutcome background = await CapturePipelines.CaptureBrowserContainerBackground(
                 window,
-                maxChars: 3000);
+                maxChars: 6000, selectedTextHint: selected.Text);
 
             if (!selected.Success)
             {
@@ -35,7 +35,7 @@ namespace CodeExplainer.Engine.Strategies
                     background.Text);
             }
 
-            bool isPartial = background.IsMetadataFallback;
+            bool isPartial = background.IsMetadataFallback || background.Method == CaptureMethod.OcrVisualCapture;
             string combinedStatus = $"{selected.Status} {background.Status}".Trim();
 
             return new CaptureResult(
@@ -48,7 +48,9 @@ namespace CodeExplainer.Engine.Strategies
                 backgroundMethod: background.Method,
                 isPartial: isPartial,
                 isUnsupported: false,
-                statusMessage: combinedStatus);
+                statusMessage: combinedStatus,
+                ocrUsed: background.Method == CaptureMethod.OcrVisualCapture,
+                ocrConfidence: background.OcrConfidence);
         }
     }
 }

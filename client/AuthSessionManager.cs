@@ -47,6 +47,12 @@ namespace CodeExplainer
                 await EnsureValidAccessTokenAsync();
                 return true;
             }
+            catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException
+                || ex is AuthApiException apiError && apiError.StatusCode >= 500)
+            {
+                RuntimeLog.Warn("Auth", "Session refresh is temporarily unavailable; preserving the saved session for retry.");
+                return true;
+            }
             catch
             {
                 ClearLocalSession();

@@ -5,6 +5,7 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>CodeExplainer</AssemblyName>
     <RootNamespace>CodeExplainer</RootNamespace>
@@ -14,6 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="InputSimulatorCore" Version="1.0.5" />
+    <InternalsVisibleTo Include="SimpleDocs.Tests" />
   </ItemGroup>
 
   <ItemGroup>

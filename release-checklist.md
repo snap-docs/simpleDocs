@@ -10,6 +10,7 @@
   - `AI_PROVIDER`
   - `GROQ_API_KEY`
   - `GROQ_API_KEY_FALLBACK` if used
+  - `GROQ_MODEL` set to a model currently available to the deployment key
 - confirm `SKIP_AUTH=false`
 - confirm `PUBLIC_APP_URL` matches the live Azure URL
 - save/apply the settings
@@ -40,7 +41,7 @@
 
 ### Client
 
-1. run `./publish-client.ps1 -Configuration Release -Runtime win-x64 -EnvironmentName Production`
+1. run `./publish-client.ps1 -Configuration Release -Runtime win-x64 -EnvironmentName Production` (self-contained by default)
 2. confirm output exists in `dist/client/`
 3. confirm `CodeExplainer.exe` opens directly with hosted production settings
 4. run `./prepare-tester-bundle.ps1 -EnvironmentName Production`
@@ -58,8 +59,9 @@
 
 1. run `npm run check`
 2. run `npm run check:db`
-3. confirm no local secrets are committed
-4. confirm Azure deploy workflow still targets only `backend/`
+3. run `npm audit --omit=dev --audit-level=moderate`
+4. confirm no local secrets are committed
+5. confirm Azure deploy workflow still targets only `backend/`
 
 ## 5. Functional Verification
 

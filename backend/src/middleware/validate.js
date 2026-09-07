@@ -13,6 +13,10 @@ export async function validateExplainRequest(c, next) {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
 
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json({ error: 'JSON body must be an object' }, 400);
+  }
+
   const {
     selected_text,
     background_context,

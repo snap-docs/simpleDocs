@@ -35,17 +35,17 @@ namespace CodeExplainer.Engine.Strategies
                 allowMsaaFocusedFallback: false,
                 allowOcrFallback: false);
 
+            if (selected.Success)
+            {
+                var snapshot = await EditorBridgeClient.TryCaptureAsync(selected.Text);
+                if (snapshot != null)
+                    return new CaptureResult(selected.Text, snapshot.BackgroundContext!, window.Title,
+                        window.ProcessName, EnvironmentType.IDE, selected.Method, CaptureMethod.EditorBridge,
+                        false, false, "Context captured from the active editor buffer, including unsaved changes.");
+            }
+
             CapturePipelines.BackgroundCaptureOutcome background =
                 CapturePipelines.CaptureEditorBackground(window, maxChars: 10000, selectedTextHint: selected.Text);
-
-            if (ShouldDemoteWeakMsaaSelection(selected, background))
-            {
-                selected = new CapturePipelines.SelectedCaptureOutcome
-                {
-                    Method = CaptureMethod.Unsupported,
-                    Status = "Selected text was demoted because weak MSAA selected/background sources heavily overlapped."
-                };
-            }
 
             // ── OCR selected-text fallback ─────────────────────────────────────
             bool ocrUsed = false;
@@ -58,35 +58,6 @@ namespace CodeExplainer.Engine.Strategies
                 RuntimeLog.Warn("IDE", "Selected text capture failed via UIA/MSAA/clipboard. OCR selected-text fallback is disabled by policy.");
             }
 
-            if (background.IsMetadataFallback)
-            {
-                string? expandedCompatBackground = await _compatibilityMode.TryCaptureExpandedEditorBackgroundTextAsync(window, selected.Text);
-                if (!string.IsNullOrWhiteSpace(expandedCompatBackground))
-                {
-                    background = new CapturePipelines.BackgroundCaptureOutcome
-                    {
-                        Text = expandedCompatBackground,
-                        Method = CaptureMethod.ClipboardCompatibility,
-                        Status = "Background context captured via expanded clipboard compatibility fallback.",
-                        IsMetadataFallback = false
-                    };
-                }
-                else
-                {
-                    string? compatBackground = await _compatibilityMode.TryCaptureEditorBackgroundTextAsync(window, selected.Text);
-                    if (!string.IsNullOrWhiteSpace(compatBackground))
-                    {
-                        background = new CapturePipelines.BackgroundCaptureOutcome
-                        {
-                            Text = compatBackground,
-                            Method = CaptureMethod.ClipboardCompatibility,
-                            Status = "Background context captured via clipboard compatibility fallback.",
-                            IsMetadataFallback = false
-                        };
-                    }
-                }
-            }
-
             // ── Tier 4: OCR last resort ──────────────────────────────────────────
             // Fires only when all UIA, MSAA, and clipboard compat paths have failed.
             // Uses EditorViewport crop to avoid capturing sidebar/panel chrome.
@@ -96,7 +67,8 @@ namespace CodeExplainer.Engine.Strategies
             {
                 RuntimeLog.Warn("IDE", "All structured background capture paths failed. Attempting OCR last resort on editor viewport.");
                 var ocrResult = await OcrCapture.CaptureWithConfidenceAsync(window, OcrCaptureArea.EditorViewport);
-                if (ocrResult.IsUsable(OcrCapture.BackgroundThreshold))
+                if (ocrResult.IsUsable(OcrCapture.BackgroundThreshold)
+                    && ContextTextWindow.AddsContext(ocrResult.Text, selected.Text))
                 {
                     RuntimeLog.Info("IDE", $"OCR last resort succeeded for {window.ProcessName} (confidence {ocrResult.Confidence:F2}, chars {ocrResult.Text.Length}).");
                     background = new CapturePipelines.BackgroundCaptureOutcome
@@ -135,7 +107,7 @@ namespace CodeExplainer.Engine.Strategies
                     statusMessage: status);
             }
 
-            bool isPartial = background.IsMetadataFallback;
+            bool isPartial = background.IsMetadataFallback || ocrUsed;
             string combinedStatus = $"{selected.Status} {background.Status}".Trim();
 
             return new CaptureResult(
@@ -168,45 +140,12 @@ namespace CodeExplainer.Engine.Strategies
             bool ocrUsed = false;
             float ocrConfidence = 0f;
 
-            // ── OCR selected-text fallback ─────────────────────────────────────
-            if (!selected.Success)
-            {
-                RuntimeLog.Info("IDE", "Embedded terminal: UIA/MSAA/clipboard failed – attempting OCR selected-text fallback.");
-                var ocrResult = await OcrCapture.CaptureWithConfidenceAsync(window, OcrCaptureArea.TerminalViewport);
-
-                if (ocrResult.IsUsable(OcrCapture.SelectedTextThreshold))
-                {
-                    selected = new CapturePipelines.SelectedCaptureOutcome
-                    {
-                        Text   = ocrResult.Text,
-                        Method = CaptureMethod.OcrVisualCapture,
-                        Status = $"Embedded terminal text captured via OCR (confidence {ocrResult.Confidence:F2})."
-                    };
-                    ocrUsed = true;
-                    ocrConfidence = ocrResult.Confidence;
-                }
-                else if (ocrResult.IsUsable(OcrCapture.BackgroundThreshold))
-                {
-                    if (string.IsNullOrWhiteSpace(background.Text))
-                    {
-                        background = new CapturePipelines.BackgroundCaptureOutcome
-                        {
-                            Text   = ocrResult.Text,
-                            Method = CaptureMethod.OcrVisualCapture,
-                            Status = $"Embedded terminal background via OCR (confidence {ocrResult.Confidence:F2}).",
-                            IsMetadataFallback = false
-                        };
-                    }
-                    ocrUsed = true;
-                    ocrConfidence = ocrResult.Confidence;
-                }
-            }
-
             // ── OCR background fallback ────────────────────────────────────────
             if (!ocrUsed && background.IsMetadataFallback)
             {
                 var ocrBg = await OcrCapture.CaptureWithConfidenceAsync(window, OcrCaptureArea.TerminalViewport);
-                if (ocrBg.IsUsable(OcrCapture.TerminalThreshold))
+                if (ocrBg.IsUsable(OcrCapture.TerminalThreshold)
+                    && ContextTextWindow.AddsContext(ocrBg.Text, selected.Text))
                 {
                     background = new CapturePipelines.BackgroundCaptureOutcome
                     {
@@ -246,7 +185,7 @@ namespace CodeExplainer.Engine.Strategies
                     backgroundContext: string.Empty);
             }
 
-            bool isPartial = background.IsMetadataFallback;
+            bool isPartial = background.IsMetadataFallback || ocrUsed;
             string combinedStatus = $"{selected.Status} {background.Status}".Trim();
 
             return new CaptureResult(

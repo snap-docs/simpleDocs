@@ -16,7 +16,13 @@ The main architecture is intentionally preserved.
 
 ## Current Product Status
 
-The project is now in pilot-ready implementation state with a few remaining rollout checks.
+The codebase builds as a pilot candidate, but the hosted system is currently a release no-go.
+
+Live check on 2026-08-30:
+
+- the configured Azure App Service returns `403` because the web app is stopped
+- the configured Supabase hostname does not resolve
+- the previously configured Groq model was retired and has been replaced in this branch with `openai/gpt-oss-120b`
 
 Implemented now:
 
@@ -33,14 +39,13 @@ Implemented now:
 - tester zip package works
 - client can start automatically with Windows using a Registry `Run` entry
 - Windows auto-start is ON by default and can be toggled from the tray menu
-- Azure App Service backend is live
-- hosted `/api/health` is live and returning `ok`
-- hosted redeem-code login, refresh, and logout flows are working
-- hosted DB connectivity checks are working
 - Groq fallback-key support is implemented in the backend
 
 Current remaining rollout work:
 
+- restart/redeploy the Azure App Service and confirm its production environment
+- restore or replace the Supabase project and apply all migrations
+- set the hosted `GROQ_MODEL` to a currently available model
 - run one final clean-machine launch of the packaged client outside the dev machine
 - validate the tester package on at least one additional Windows environment
 - complete internal pilot monitoring and support workflow
@@ -172,26 +177,26 @@ Current hosted backend shape:
 - production client config points to the hosted Azure backend
 - Windows client remains responsible for capture, hotkey, overlay, and local auth state
 
-Verified now:
+Verified locally on 2026-08-30:
 
-- hosted health endpoint responds successfully
-- hosted auth flow works
-- hosted request logging works
-- feedback updates `request_logs.feedback_reaction`
+- backend syntax and dependency audits pass
+- local health and Groq WebSocket streaming pass
+- client Release build and self-contained Production publish pass
 - tester zip builds correctly from the current repo
 - direct `CodeExplainer.exe` launch is the supported packaged path
 
 Remaining operational validation:
 
+- restore and revalidate Azure, Supabase, hosted auth, logging, and feedback
 - one clean-machine packaged launch outside the development machine
 - broader multi-app pilot validation across real tester machines
 
 ## Immediate Next Steps
 
-1. validate the latest zip on one clean Windows machine
-2. issue redeem codes to internal pilot users
-3. monitor `request_logs` and `feedback_reaction` during pilot use
-4. collect capture-quality feedback from editors, browsers, and terminals
+1. restore the hosted backend and database
+2. validate hosted health, auth, WebSocket streaming, logging, and feedback
+3. validate the latest zip on one clean Windows machine
+4. issue redeem codes to internal pilot users
 5. rotate temporary development secrets before a wider external rollout
 
 ## Important Documents

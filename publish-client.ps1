@@ -4,7 +4,8 @@ param(
     [string]$EnvironmentName = "Production",
     [string]$OutputRoot = ".\dist\client",
     [string]$Version = "1.1.0-pilot",
-    [switch]$SelfContained
+    [switch]$SelfContained,
+    [switch]$FrameworkDependent
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,15 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $clientProject = Join-Path $projectRoot "client\CodeExplainer.csproj"
 $publishDir = Join-Path $projectRoot $OutputRoot
+$publishSelfContained = -not $FrameworkDependent.IsPresent
+
+if ($SelfContained.IsPresent -and $FrameworkDependent.IsPresent) {
+    throw "Choose either -SelfContained or -FrameworkDependent, not both."
+}
+
+if ($SelfContained.IsPresent) {
+    $publishSelfContained = $true
+}
 
 if (Test-Path $publishDir) {
     Remove-Item -LiteralPath $publishDir -Recurse -Force
@@ -34,7 +44,7 @@ $publishArgs = @(
     "/p:IncludeNativeLibrariesForSelfExtract=true"
 )
 
-if ($SelfContained.IsPresent) {
+if ($publishSelfContained) {
     $publishArgs += "--self-contained"
     $publishArgs += "true"
 } else {
@@ -54,6 +64,29 @@ if (Test-Path $publishedEnvironmentConfigPath) {
     Copy-Item -LiteralPath $publishedEnvironmentConfigPath -Destination $publishedBaseConfigPath -Force
 }
 
+if (-not (Test-Path $publishedBaseConfigPath)) {
+    throw "Published appsettings.json was not found."
+}
+
+$publishedConfig = Get-Content -LiteralPath $publishedBaseConfigPath -Raw | ConvertFrom-Json
+if ($EnvironmentName -eq "Production") {
+    if ($publishedConfig.Environment -ne "Production") {
+        throw "Production package validation failed: Environment must be Production."
+    }
+
+    if ($publishedConfig.Auth.Enabled -ne $true) {
+        throw "Production package validation failed: authentication must be enabled."
+    }
+
+    if ($publishedConfig.Backend.ApiBaseUrl -notmatch '^https://') {
+        throw "Production package validation failed: ApiBaseUrl must use HTTPS."
+    }
+
+    if ($publishedConfig.Backend.WsBaseUrl -notmatch '^wss://') {
+        throw "Production package validation failed: WsBaseUrl must use WSS."
+    }
+}
+
 $launcherPath = Join-Path $publishDir "Start-CodeExplainer.bat"
 $launcherContent = @"
 @echo off
@@ -69,6 +102,7 @@ $manifest = @{
     environment = $EnvironmentName
     runtime = $Runtime
     configuration = $Configuration
+    self_contained = $publishSelfContained
     generated_at_utc = [DateTime]::UtcNow.ToString("o")
 } | ConvertTo-Json
 Set-Content -LiteralPath $manifestPath -Value $manifest -Encoding ASCII

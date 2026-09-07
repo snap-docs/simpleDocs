@@ -3,6 +3,7 @@ namespace CodeExplainer.Engine.Models
     public enum CaptureMethod
     {
         None,
+        EditorBridge,
         UiaTextPatternSelection,
         UiaTextPatternDocumentRange,
         UiaTextPatternVisibleRanges,
@@ -26,6 +27,7 @@ namespace CodeExplainer.Engine.Models
             return method switch
             {
                 CaptureMethod.None => "none",
+                CaptureMethod.EditorBridge => "editor_bridge",
                 CaptureMethod.UiaTextPatternSelection => "uia_textpattern_selection",
                 CaptureMethod.UiaTextPatternDocumentRange => "uia_textpattern_document_range",
                 CaptureMethod.UiaTextPatternVisibleRanges => "uia_textpattern_visible_ranges",

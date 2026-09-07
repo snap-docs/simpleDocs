@@ -100,7 +100,7 @@ File: `client/Engine/ContextCaptureEngine.cs`
 
 `ExecuteCaptureAsync` is the top-level capture pipeline. It detects the active window, classifies the environment, chooses a strategy, executes capture, builds usage context, logs summary data, and returns `CaptureResult`.
 
-`LogCaptureSummary` logs selected/background length, capture methods, partial state, unsupported state, and full debug text.
+`LogCaptureSummary` logs lengths, methods, partial state, unsupported state, and timing without recording captured user text.
 
 ### `EnvironmentClassifier`
 
@@ -130,7 +130,13 @@ File: `client/Engine/Strategies/ClipboardCompatibilityMode.cs`
 
 The selected-text methods simulate copy behavior safely when accessibility APIs fail. They back up the clipboard, perform copy, read copied text, and restore the original clipboard.
 
-The expanded editor background method temporarily adjusts selection around the caret to copy more context. It is useful for IDEs where UIA cannot provide reliable local context.
+Clipboard compatibility copies only the user's existing selection. It never moves the caret or expands selection to obtain background text.
+
+### `CaptureScope`, `ContextTextWindow`, and `EditorBridgeClient`
+
+Files: `client/Engine/Strategies/CaptureScope.cs`, `client/Engine/Strategies/ContextTextWindow.cs`, `client/Engine/Strategies/EditorBridgeClient.cs`
+
+`CaptureScope` provides a fixed focus/window boundary and lifetime. `ContextTextWindow` creates selection-centered bounded context and rejects echoes. `EditorBridgeClient` authenticates a local VS Code/Cursor bridge response and accepts it only for an exact native selection match.
 
 ### `UiAutomationCapture`, `MsaaCapture`, and `OcrCapture`
 

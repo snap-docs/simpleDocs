@@ -234,6 +234,7 @@ namespace CodeExplainer
             catch (Exception ex)
             {
                 RuntimeLog.Error("App", $"req={requestId} Error handling hotkey: {ex.Message}");
+                _overlayWindow?.ShowMessage("The request could not complete. Check the connection and try again.", "Request unavailable");
                 System.Diagnostics.Debug.WriteLine($"Error handling hotkey: {ex.Message}");
             }
             finally
@@ -262,8 +263,7 @@ namespace CodeExplainer
 
             if (captureResult.HasSelectedText)
             {
-                RuntimeLog.Info("Capture", $"req={requestId} Selected preview: {RuntimeLog.Preview(captureResult.SelectedText)}");
-                RuntimeLog.Info("Capture", $"req={requestId} Selected full: {EscapeForSingleLineLog(captureResult.SelectedText)}");
+                LogCapturePreviewForDevelopment(requestId, "Selected", captureResult.SelectedText);
             }
             else
             {
@@ -272,8 +272,7 @@ namespace CodeExplainer
 
             if (!string.IsNullOrWhiteSpace(captureResult.BackgroundContext))
             {
-                RuntimeLog.Info("Capture", $"req={requestId} Background preview: {RuntimeLog.Preview(captureResult.BackgroundContext)}");
-                RuntimeLog.Info("Capture", $"req={requestId} Background full: {EscapeForSingleLineLog(captureResult.BackgroundContext)}");
+                LogCapturePreviewForDevelopment(requestId, "Background", captureResult.BackgroundContext);
             }
 
             if (captureResult.IsUnsupported)
@@ -491,18 +490,14 @@ namespace CodeExplainer
             return $"{captureResult.Type.ToApiValue()} | {captureResult.SelectedMethod.ToApiValue()} + {captureResult.BackgroundMethod.ToApiValue()} | {mode}";
         }
 
-        private static string EscapeForSingleLineLog(string? text)
+        private void LogCapturePreviewForDevelopment(int requestId, string label, string? text)
         {
-            if (string.IsNullOrWhiteSpace(text))
+            if (!string.Equals(_config?.EnvironmentName, "Development", StringComparison.OrdinalIgnoreCase))
             {
-                return "<empty>";
+                return;
             }
 
-            return text
-                .Replace("\\", "\\\\")
-                .Replace("\r", "\\r")
-                .Replace("\n", "\\n")
-                .Trim();
+            RuntimeLog.Info("Capture", $"req={requestId} {label} preview: {RuntimeLog.Preview(text)}");
         }
 
         private void ExitApp()

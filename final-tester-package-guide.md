@@ -8,6 +8,8 @@ It is not a traditional installer.
 
 The tester does not need to install it into `Program Files`.
 
+The tester does not need to install the .NET runtime separately.
+
 They only need to unzip it and run the app.
 
 ## What the tester will see after unzipping

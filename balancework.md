@@ -1,6 +1,6 @@
 # Balance Work
 
-This document tracks the real remaining work after the current implementation and hosted deployment.
+This document tracks the real remaining work after the current implementation. Hosted status must be revalidated before release.
 
 ## Current Position
 
@@ -12,11 +12,10 @@ This document tracks the real remaining work after the current implementation an
 - redeem-code auth is working in backend and client
 - secure token storage is working
 - authenticated WebSocket flow is working
-- hosted Supabase connectivity is working
-- hosted request logging is working
+- Supabase connectivity and request logging are implemented but the configured hosted project did not resolve on 2026-08-30
 - thumbs feedback is working
 - feedback is stored in `request_logs.feedback_reaction`
-- Azure App Service backend is deployed and healthy
+- Azure deployment wiring exists, but the configured web app returned a stopped-app `403` on 2026-08-30
 - production package build works
 - Windows auto-start support is implemented
 - auto-start can be toggled from the tray menu

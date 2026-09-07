@@ -97,13 +97,23 @@ The compatibility path is careful:
 
 - backs up clipboard contents
 - simulates copy
-- waits for clipboard text to change
+- accepts a valid copy even when it equals the previous clipboard text
 - reads copied text
-- restores the original clipboard
+- restores materialized formats only if no other application changed the clipboard
 
 This is not the first option because it touches user clipboard state. But without this mode, many editors and browser-like surfaces would fail in real use.
 
 Terminal-specific clipboard capture is separate because terminals can react differently to keyboard shortcuts and selection state.
+
+The compatibility path never expands the selection or moves the caret to collect background text. Exact IDE context instead comes from the optional editor bridge or selection-anchored UIA ranges.
+
+## Focus Scope And Editor Bridge
+
+`CaptureScope` freezes the foreground window and focused UIA element for one capture. UIA provider work runs away from the WPF UI thread, only one capture is active, and stale results are discarded after focus changes or timeout.
+
+`ContextTextWindow` bounds context around the exact selection and rejects candidates that are only selection echoes.
+
+`EditorBridgeClient` talks to the VS Code/Cursor extension over a user-only local named pipe. The extension reads the active editor buffer, including unsaved text, but responds only for a focused window with one non-empty selection. The desktop client independently requires an exact selection match.
 
 ## Background Context Capture
 
@@ -126,7 +136,7 @@ The selection hint helps anchor context. If selected text is found inside a larg
 
 ## OCR Fallback
 
-OCR is the last-resort path for visual-only or accessibility-blocked surfaces.
+OCR is the last-resort background path for visual-only or accessibility-blocked surfaces. It is not used to claim exact selected text.
 
 The capture result includes:
 

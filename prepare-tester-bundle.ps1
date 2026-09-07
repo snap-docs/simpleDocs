@@ -14,6 +14,21 @@ if (-not (Test-Path $clientDistPath)) {
     throw "Client dist not found. Run publish-client.ps1 first."
 }
 
+$clientConfigPath = Join-Path $clientDistPath "appsettings.json"
+if (-not (Test-Path $clientConfigPath)) {
+    throw "Client appsettings.json was not found: $clientConfigPath"
+}
+
+$clientConfig = Get-Content -LiteralPath $clientConfigPath -Raw | ConvertFrom-Json
+if ($EnvironmentName -eq "Production") {
+    if ($clientConfig.Environment -ne "Production" -or
+        $clientConfig.Auth.Enabled -ne $true -or
+        $clientConfig.Backend.ApiBaseUrl -notmatch '^https://' -or
+        $clientConfig.Backend.WsBaseUrl -notmatch '^wss://') {
+        throw "Refusing to create a Production tester bundle from non-production client configuration."
+    }
+}
+
 if (Test-Path $outputDir) {
     Remove-Item -LiteralPath $outputDir -Recurse -Force
 }
@@ -21,6 +36,7 @@ if (Test-Path $outputDir) {
 New-Item -ItemType Directory -Path $outputDir | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $outputDir "app") | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $outputDir "docs") | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $outputDir "editor-extension") | Out-Null
 
 # Copy only the files testers actually need to run the app.
 $runtimeFiles = @(
@@ -44,6 +60,14 @@ if (Test-Path (Join-Path $projectRoot "chatgpt-tester-plan-prompt.md")) {
     Copy-Item -LiteralPath (Join-Path $projectRoot "chatgpt-tester-plan-prompt.md") -Destination (Join-Path $outputDir "docs\chatgpt-tester-plan-prompt.md") -Force
 }
 
+$extensionPackage = Get-ChildItem -LiteralPath (Join-Path $projectRoot "dist") -Filter "simpledocs-context-*.vsix" -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTimeUtc -Descending |
+    Select-Object -First 1
+if ($extensionPackage) {
+    Copy-Item -LiteralPath $extensionPackage.FullName -Destination (Join-Path $outputDir "editor-extension" $extensionPackage.Name) -Force
+    Copy-Item -LiteralPath (Join-Path $projectRoot "editor-extension\README.md") -Destination (Join-Path $outputDir "editor-extension\README.md") -Force
+}
+
 $readmePath = Join-Path $outputDir "README-FIRST.txt"
 $readme = @"
 simpleDocs tester bundle
@@ -54,6 +78,7 @@ simpleDocs tester bundle
 4. Enter the redeem code you received
 5. Use the configured hotkey inside your normal workflow
 6. The app starts with Windows by default and can be changed from the tray menu
+7. VS Code or Cursor users can install the optional VSIX in editor-extension for exact unsaved-buffer context
 
 Environment: $EnvironmentName
 "@

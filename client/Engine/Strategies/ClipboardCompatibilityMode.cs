@@ -42,7 +42,7 @@ namespace CodeExplainer.Engine.Strategies
 
             if (IsIdeProcess(window.ProcessName) && !UiAutomationCapture.IsEditorContentFocusedElement())
             {
-                RuntimeLog.Warn("CompatClipboard", $"Editor-focus probe was negative for {window.ProcessName}; attempting compatibility capture anyway.");
+                return null;
             }
 
             RuntimeLog.Warn("CompatClipboard", $"Using optional compatibility mode for {window.ProcessName}.");
@@ -52,11 +52,8 @@ namespace CodeExplainer.Engine.Strategies
             {
                 await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
 
-                if (window.Hwnd != IntPtr.Zero && Win32Native.IsWindow(window.Hwnd))
-                {
-                    Win32Native.SetForegroundWindow(window.Hwnd);
-                    await Task.Delay(120);
-                }
+                if (Win32Native.GetForegroundWindow() != window.Hwnd || CaptureScope.Current?.IsValid == false)
+                    throw new InvalidOperationException("Capture focus changed before copying.");
 
                 // Compatibility mode is selected-text-only and never uses Ctrl+A.
                 simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_C);
@@ -67,12 +64,6 @@ namespace CodeExplainer.Engine.Strategies
             if (!outcome.ClipboardMutatedDuringRequest)
             {
                 RuntimeLog.Warn("CompatClipboard", "Rejected capture: clipboard was not mutated during this request.");
-                return null;
-            }
-
-            if (!outcome.DiffersFromPreviousText)
-            {
-                RuntimeLog.Warn("CompatClipboard", "Rejected capture: clipboard result matches previous clipboard content.");
                 return null;
             }
 
@@ -100,11 +91,7 @@ namespace CodeExplainer.Engine.Strategies
                 return null;
             }
 
-            if (window.Hwnd != IntPtr.Zero && Win32Native.IsWindow(window.Hwnd))
-            {
-                Win32Native.SetForegroundWindow(window.Hwnd);
-                await Task.Delay(80);
-            }
+            if (!Enabled || !UiAutomationCapture.HasSelection()) return null;
 
             if (window.Hwnd != IntPtr.Zero && Win32Native.GetForegroundWindow() != window.Hwnd)
             {
@@ -119,11 +106,8 @@ namespace CodeExplainer.Engine.Strategies
             {
                 await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
 
-                if (window.Hwnd != IntPtr.Zero && Win32Native.IsWindow(window.Hwnd))
-                {
-                    Win32Native.SetForegroundWindow(window.Hwnd);
-                    await Task.Delay(80);
-                }
+                if (Win32Native.GetForegroundWindow() != window.Hwnd || CaptureScope.Current?.IsValid == false)
+                    throw new InvalidOperationException("Capture focus changed before copying.");
 
                 simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_C);
                 await Task.Delay(250);
@@ -142,12 +126,6 @@ namespace CodeExplainer.Engine.Strategies
                 return null;
             }
 
-            if (!outcome.DiffersFromPreviousText)
-            {
-                RuntimeLog.Warn("CompatClipboard", "Rejected terminal capture: clipboard result matches previous clipboard content.");
-                return null;
-            }
-
             if (!outcome.ClipboardChanged)
             {
                 RuntimeLog.Warn("CompatClipboard", "Rejected terminal capture: clipboard changed flag is false.");
@@ -162,201 +140,6 @@ namespace CodeExplainer.Engine.Strategies
 
             RuntimeLog.Warn("CompatClipboard", "Terminal compatibility mode did not capture plausible terminal selected text.");
             return null;
-        }
-
-        public async Task<string?> TryCaptureEditorBackgroundTextAsync(ActiveWindowInfo window, string? selectedTextHint)
-        {
-            if (!Enabled)
-            {
-                return null;
-            }
-
-            if (!IsProcessWhitelisted(window.ProcessName))
-            {
-                RuntimeLog.Info("CompatClipboard", $"Skipped editor background capture for {window.ProcessName}: not in whitelist.");
-                return null;
-            }
-
-            if (!IsIdeProcess(window.ProcessName))
-            {
-                RuntimeLog.Warn("CompatClipboard", $"Skipped editor background capture for {window.ProcessName}: process is not IDE-like.");
-                return null;
-            }
-
-            if (!UiAutomationCapture.IsEditorContentFocusedElement())
-            {
-                RuntimeLog.Warn("CompatClipboard", $"Editor-focus probe was negative for {window.ProcessName}; attempting editor background capture anyway.");
-            }
-
-            RuntimeLog.Warn("CompatClipboard", $"Trying editor background clipboard compatibility for {window.ProcessName}.");
-
-            var simulator = new InputSimulator();
-            ClipboardManager.ClipboardCaptureOutcome outcome = await _clipboardManager.SafeCaptureSelectionAsync(async () =>
-            {
-                await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
-
-                if (window.Hwnd != IntPtr.Zero && Win32Native.IsWindow(window.Hwnd))
-                {
-                    Win32Native.SetForegroundWindow(window.Hwnd);
-                    await Task.Delay(120);
-                }
-
-                // FIXED: Symmetrical cursor walk to prevent permanent jumping.
-                // 1. Collapse and go up 6 lines.
-                // 2. Select 12 lines DOWN.
-                // 3. Copy.
-                // 4. Collapse (cursor returns to top of selection, i.e., -6 lines).
-                // 5. Walk DOWN 6 lines back to the exact starting position.
-                simulator.Keyboard.KeyPress(VirtualKeyCode.LEFT);
-                await Task.Delay(25);
-                simulator.Keyboard.KeyPress(VirtualKeyCode.HOME);
-                await Task.Delay(20);
-
-                // Move up 6 lines
-                for (int i = 0; i < 6; i++)
-                {
-                    simulator.Keyboard.KeyPress(VirtualKeyCode.UP);
-                    await Task.Delay(10);
-                }
-
-                // Select down 12 lines
-                for (int i = 0; i < 12; i++)
-                {
-                    simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.SHIFT, VirtualKeyCode.DOWN);
-                    await Task.Delay(12);
-                }
-
-                simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_C);
-                await Task.Delay(240);
-
-                // Collapse selection. In most editors (VS Code, VS, Notepad), 
-                // Left Arrow on a downstream block collapses to the start of the block.
-                simulator.Keyboard.KeyPress(VirtualKeyCode.LEFT);
-                await Task.Delay(20);
-
-                // Walk down 6 lines to restore exact original cursor position
-                for (int i = 0; i < 6; i++)
-                {
-                    simulator.Keyboard.KeyPress(VirtualKeyCode.DOWN);
-                    await Task.Delay(10);
-                }
-            });
-
-            string? text = outcome.CapturedText?.Trim();
-            if (!outcome.ClipboardMutatedDuringRequest || !outcome.DiffersFromPreviousText || !outcome.ClipboardChanged)
-            {
-                RuntimeLog.Warn("CompatClipboard", "Rejected editor background clipboard capture: clipboard mutation/change checks failed.");
-                return null;
-            }
-
-            text = CapturePipelines.RefineEditorBackgroundForExternalUse(text ?? string.Empty, selectedTextHint, 2800);
-            if (!LooksLikePlausibleEditorSelectionText(text ?? string.Empty))
-            {
-                RuntimeLog.Warn("CompatClipboard", "Rejected editor background clipboard capture: captured text is not plausible.");
-                return null;
-            }
-
-            if (!CapturePipelines.AddsUsefulBackgroundContext(text!, selectedTextHint))
-            {
-                RuntimeLog.Warn("CompatClipboard", "Rejected editor background clipboard capture: text does not add context beyond selection.");
-                return null;
-            }
-
-            RuntimeLog.Warn("CompatClipboard", $"Using editor background clipboard capture ({text!.Length} chars).");
-            return text;
-        }
-
-        public async Task<string?> TryCaptureExpandedEditorBackgroundTextAsync(ActiveWindowInfo window, string? selectedTextHint, int extraLines = 40)
-        {
-            if (!Enabled)
-            {
-                return null;
-            }
-
-            if (!IsProcessWhitelisted(window.ProcessName) || !IsIdeProcess(window.ProcessName))
-            {
-                return null;
-            }
-
-            RuntimeLog.Warn("CompatClipboard", $"Trying expanded editor background capture for {window.ProcessName}.");
-
-            var simulator = new InputSimulator();
-            ClipboardManager.ClipboardCaptureOutcome outcome = await _clipboardManager.SafeCaptureSelectionAsync(async () =>
-            {
-                await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
-
-                if (window.Hwnd != IntPtr.Zero && Win32Native.IsWindow(window.Hwnd))
-                {
-                    Win32Native.SetForegroundWindow(window.Hwnd);
-                    await Task.Delay(120);
-                }
-
-                int selectedLineCount = EstimateLineCount(selectedTextHint);
-                int linesBefore = 20;
-                int linesAfter = extraLines < 20 ? 20 : (extraLines > 60 ? 60 : extraLines);
-                int totalLines = linesBefore + selectedLineCount + linesAfter;
-                if (totalLines < 40)
-                {
-                    totalLines = 40;
-                }
-                else if (totalLines > 96)
-                {
-                    totalLines = 96;
-                }
-
-                // Step 1: Collapse active selection to start, move up for context lines
-                simulator.Keyboard.KeyPress(VirtualKeyCode.LEFT);
-                await Task.Delay(25);
-
-                for (int i = 0; i < linesBefore; i++)
-                {
-                    simulator.Keyboard.KeyPress(VirtualKeyCode.UP);
-                    await Task.Delay(10);
-                }
-
-                // Step 2: Go to start of that line
-                simulator.Keyboard.KeyPress(VirtualKeyCode.HOME);
-                await Task.Delay(20);
-
-                // Step 3: Use Ctrl+L to select each line (VS Code/Cursor: "Select Line")
-                for (int i = 0; i < totalLines; i++)
-                {
-                    simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_L);
-                    await Task.Delay(i == 0 ? 40 : 18);
-                }
-
-                // Step 4: Copy and wait generously
-                simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_C);
-                await Task.Delay(300);  // FIXED: increased from 220ms — gives VS Code time to populate clipboard
-
-                // Step 5: Undo the cursor changes! Ctrl+U is the native "Cursor Undo" hotkey in VS Code.
-                // This perfectly restores the cursor and selection to exactly where it was before Step 1.
-                simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_U);
-                await Task.Delay(30);
-            });
-
-            string? text = outcome.CapturedText?.Trim();
-            if (!outcome.ClipboardMutatedDuringRequest || !outcome.DiffersFromPreviousText || !outcome.ClipboardChanged)
-            {
-                RuntimeLog.Warn("CompatClipboard", "Rejected expanded editor background capture: clipboard mutation/change checks failed.");
-                return null;
-            }
-
-                text = CapturePipelines.RefineEditorBackgroundForExternalUse(text ?? string.Empty, selectedTextHint, 6000);
-            if (!LooksLikePlausibleEditorSelectionText(text ?? string.Empty))
-            {
-                RuntimeLog.Warn("CompatClipboard", "Rejected expanded editor background capture: captured text is not plausible.");
-                return null;
-            }
-
-            if (!CapturePipelines.AddsUsefulBackgroundContext(text!, selectedTextHint))
-            {
-                RuntimeLog.Warn("CompatClipboard", "Rejected expanded editor background capture: text does not add context beyond selection.");
-                return null;
-            }
-
-            RuntimeLog.Warn("CompatClipboard", $"Using expanded editor background capture ({text!.Length} chars).");
-            return text;
         }
 
         private static bool IsEnabledFromEnvironment()

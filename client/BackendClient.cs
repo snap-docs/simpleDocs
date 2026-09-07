@@ -7,7 +7,6 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.Http.Headers;
-using System.Net;
 
 namespace CodeExplainer
 {
@@ -188,7 +187,7 @@ namespace CodeExplainer
             bool isUnsupported)
         {
             Exception? lastError = null;
-            Uri wsUri = BuildWebSocketUri(accessToken);
+            Uri wsUri = BuildWebSocketUri();
 
             for (int attempt = 1; attempt <= Math.Max(1, _config.WebSocketRetryCount); attempt++)
             {
@@ -224,19 +223,10 @@ namespace CodeExplainer
             throw new HttpRequestException($"Unable to connect to backend WebSocket. {lastError?.Message}", lastError);
         }
 
-        private static Uri BuildWebSocketUri(string accessToken)
+        private static Uri BuildWebSocketUri()
         {
             string baseUrl = _config.WsBaseUrl?.TrimEnd('/') ?? string.Empty;
-            string fullUrl = $"{baseUrl}/ws/stream";
-
-            if (string.IsNullOrWhiteSpace(accessToken))
-            {
-                return new Uri(fullUrl);
-            }
-
-            string separator = fullUrl.Contains("?") ? "&" : "?";
-            string encodedToken = WebUtility.UrlEncode(accessToken);
-            return new Uri($"{fullUrl}{separator}access_token={encodedToken}");
+            return new Uri($"{baseUrl}/ws/stream");
         }
 
         private static string MaskAccessToken(Uri uri)

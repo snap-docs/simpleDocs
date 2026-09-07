@@ -50,7 +50,8 @@ export async function logCompletedRequest(record) {
   try {
     const { error } = await client
       .from(config.requestLogsTable)
-      .insert(record);
+      .insert(record)
+      .abortSignal(AbortSignal.timeout(5000));
 
     if (error) {
       logger.error(`Request log insert failed: ${error.message}`);
@@ -87,7 +88,8 @@ export async function saveRequestFeedback(record) {
       .eq('request_id', record.request_id)
       .eq('participant_id', record.participant_id)
       .select('request_id')
-      .maybeSingle();
+      .maybeSingle()
+      .abortSignal(AbortSignal.timeout(5000));
 
     if (error) {
       logger.error(`Request feedback update failed: ${error.message}`);

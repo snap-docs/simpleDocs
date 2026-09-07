@@ -15,19 +15,18 @@ The current intended runtime is:
 
 ## Current Hosted State
 
-Verified now:
+Live check on 2026-08-30:
 
-- Azure App Service backend is deployed
-- hosted health endpoint responds
-- hosted redeem-code login responds successfully
-- hosted refresh and logout flow respond successfully
-- hosted authenticated WebSocket explain flow responds successfully
-- hosted request logging writes rows successfully
-- feedback updates `request_logs.feedback_reaction`
+- the configured Azure App Service returns `403` because the web app is stopped
+- the configured Supabase hostname does not resolve
+- hosted auth, logging, feedback, and WebSocket streaming therefore cannot be validated
 - production tester bundle builds successfully
 
-Still recommended before broader rollout:
+Required before broader rollout:
 
+- restore or replace the hosted Azure and Supabase services
+- set `GROQ_MODEL=openai/gpt-oss-120b` (or another model currently available to the deployment key)
+- rerun every hosted readiness check in this document
 - one clean-machine validation of the packaged client
 - broader multi-environment pilot validation
 
@@ -56,7 +55,7 @@ APP_ENV=production
 AI_PROVIDER=groq
 GROQ_API_KEY=your_primary_groq_key
 GROQ_API_KEY_FALLBACK=your_secondary_groq_key
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-120b
 OPENROUTER_API_KEY=your_openrouter_key_if_used
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_anon_key
@@ -129,6 +128,8 @@ Build the current production package with:
 .\prepare-tester-bundle.ps1 -ClientDist '.\dist\client' -OutputRoot '.\dist\tester-bundle' -EnvironmentName Production
 Compress-Archive -Path '.\dist\tester-bundle\*' -DestinationPath '.\dist\simpleDocs-direct-exe-1.1.0-pilot.zip' -Force
 ```
+
+The publish script creates a self-contained Windows executable by default, so pilot users do not need to install the .NET Desktop Runtime. Use `-FrameworkDependent` only for an intentionally smaller build on machines where .NET 8 Desktop Runtime is already installed.
 
 Current package contents should be:
 

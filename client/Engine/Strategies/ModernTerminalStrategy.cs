@@ -46,37 +46,6 @@ namespace CodeExplainer.Engine.Strategies
                 }
             }
 
-            // ── OCR selected-text fallback when primary selection fails ────────
-            if (!selected.Success)
-            {
-                RuntimeLog.Info("ModernTerminal", "Terminal selection failed – attempting OCR selected-text fallback.");
-                var ocrSel = await OcrCapture.CaptureWithConfidenceAsync(window, OcrCaptureArea.TerminalViewport);
-
-                if (ocrSel.IsUsable(OcrCapture.SelectedTextThreshold))
-                {
-                    selected = new CapturePipelines.SelectedCaptureOutcome
-                    {
-                        Text   = ocrSel.Text,
-                        Method = CaptureMethod.OcrVisualCapture,
-                        Status = $"Terminal text captured via OCR fallback (confidence {ocrSel.Confidence:F2})."
-                    };
-                    ocrUsed = true;
-                    ocrConfidence = System.Math.Max(ocrConfidence, ocrSel.Confidence);
-                }
-                else if (ocrSel.IsUsable(OcrCapture.BackgroundThreshold) && string.IsNullOrWhiteSpace(background.Text))
-                {
-                    background = new CapturePipelines.BackgroundCaptureOutcome
-                    {
-                        Text = ocrSel.Text,
-                        Method = CaptureMethod.OcrVisualCapture,
-                        IsMetadataFallback = false,
-                        Status = $"Terminal background via OCR (medium confidence {ocrSel.Confidence:F2})."
-                    };
-                    ocrUsed = true;
-                    ocrConfidence = System.Math.Max(ocrConfidence, ocrSel.Confidence);
-                }
-            }
-
             if (!selected.Success)
             {
                 string status = $"{selected.Status} {background.Status}".Trim();
@@ -89,7 +58,7 @@ namespace CodeExplainer.Engine.Strategies
                     background.Text);
             }
 
-            bool isPartial = background.IsMetadataFallback;
+            bool isPartial = background.IsMetadataFallback || ocrUsed;
             string combinedStatus = $"{selected.Status} {background.Status}".Trim();
 
             return new CaptureResult(

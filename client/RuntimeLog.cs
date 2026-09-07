@@ -56,6 +56,9 @@ namespace CodeExplainer
             {
                 lock (Sync)
                 {
+                    Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
+                    if (File.Exists(LogFilePath) && new FileInfo(LogFilePath).Length > 2 * 1024 * 1024)
+                        File.Move(LogFilePath, LogFilePath + ".previous", overwrite: true);
                     File.AppendAllText(LogFilePath, line + Environment.NewLine);
                 }
             }
@@ -67,32 +70,8 @@ namespace CodeExplainer
 
         private static string ResolveLogFilePath()
         {
-            string baseDir = AppContext.BaseDirectory;
-            string? root = TryFindRepoRoot(baseDir);
-            string logDir = root != null
-                ? Path.Combine(root, "runlogs")
-                : Path.Combine(baseDir, "runlogs");
-
-            Directory.CreateDirectory(logDir);
-            return Path.Combine(logDir, "client_live.log");
-        }
-
-        private static string? TryFindRepoRoot(string startPath)
-        {
-            var directory = new DirectoryInfo(startPath);
-            while (directory != null)
-            {
-                string backendPath = Path.Combine(directory.FullName, "backend");
-                string clientPath = Path.Combine(directory.FullName, "client");
-                if (Directory.Exists(backendPath) && Directory.Exists(clientPath))
-                {
-                    return directory.FullName;
-                }
-
-                directory = directory.Parent;
-            }
-
-            return null;
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "CodeExplainer", "logs", "client_live.log");
         }
     }
 }

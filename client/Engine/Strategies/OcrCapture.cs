@@ -9,6 +9,7 @@ using Windows.Media.Ocr;
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 using CodeExplainer.Engine.Models;
+using CodeExplainer.Engine.Managers;
 
 namespace CodeExplainer.Engine.Strategies
 {
@@ -73,6 +74,8 @@ namespace CodeExplainer.Engine.Strategies
         {
             try
             {
+                if (CaptureScope.Current?.IsValid == false || Win32Native.GetForegroundWindow() != window.Hwnd)
+                    return OcrResult.Empty;
                 if (!GetWindowRect(window.Hwnd, out RECT rect))
                 {
                     RuntimeLog.Warn("OcrCapture", "GetWindowRect failed.");
@@ -85,6 +88,16 @@ namespace CodeExplainer.Engine.Strategies
 
                 // Apply viewport crop based on area type
                 var crop = ComputeCropRect(rect, fullWidth, fullHeight, area);
+                if (UiAutomationCapture.TryGetFocusedContentBounds(out var bounds))
+                    crop = Rectangle.Intersect(new Rectangle(rect.Left, rect.Top, fullWidth, fullHeight),
+                        Rectangle.Round(new RectangleF((float)bounds.X, (float)bounds.Y, (float)bounds.Width, (float)bounds.Height)));
+                else if (area == OcrCaptureArea.EditorViewport)
+                {
+                    RuntimeLog.Warn("OcrCapture", "Editor bounds are unavailable; skipping a guessed crop. Use the editor bridge for reliable context.");
+                    return OcrResult.Empty;
+                }
+                crop = Rectangle.Intersect(crop, System.Windows.Forms.SystemInformation.VirtualScreen);
+                if (crop.Width < 1 || crop.Height < 1) return OcrResult.Empty;
 
                 using var bmp = new Bitmap(crop.Width, crop.Height, PixelFormat.Format32bppArgb);
                 using (var g = Graphics.FromImage(bmp))
@@ -93,15 +106,21 @@ namespace CodeExplainer.Engine.Strategies
                         new Size(crop.Width, crop.Height), CopyPixelOperation.SourceCopy);
                 }
 
-                using var softBmp = ConvertToSoftwareBitmap(bmp);
                 if (_engine == null)
                 {
                     RuntimeLog.Warn("OcrCapture", "OcrEngine unavailable – no language pack.");
                     return OcrResult.Empty;
                 }
 
+                double scale = Math.Min(1d, (double)OcrEngine.MaxImageDimension / Math.Max(bmp.Width, bmp.Height));
+                using var scaled = new Bitmap(bmp, new Size(Math.Max(1, (int)(bmp.Width * scale)), Math.Max(1, (int)(bmp.Height * scale))));
+                using var softBmp = ConvertToSoftwareBitmap(scaled);
+
                 var ocrResult = await _engine.RecognizeAsync(softBmp);
-                string rawText = ocrResult.Text ?? string.Empty;
+                if (CaptureScope.Current?.IsValid == false) return OcrResult.Empty;
+                var lines = new StringBuilder();
+                foreach (var line in ocrResult.Lines) lines.AppendLine(line.Text);
+                string rawText = lines.ToString();
 
                 if (string.IsNullOrWhiteSpace(rawText))
                 {
@@ -131,7 +150,7 @@ namespace CodeExplainer.Engine.Strategies
         public static async Task<string?> CaptureAsync(ActiveWindowInfo window)
         {
             var result = await CaptureWithConfidenceAsync(window, OcrCaptureArea.FullWindow);
-            return result.IsUsable(0.0f) ? result.Text : null;
+            return result.IsUsable(BackgroundThreshold) ? result.Text : null;
         }
 
         // ─── Viewport crop ─────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ namespace CodeExplainer.Engine.Strategies
             public CaptureMethod Method { get; init; } = CaptureMethod.WindowMetadata;
             public bool IsMetadataFallback { get; init; }
             public string Status { get; init; } = string.Empty;
+            public float OcrConfidence { get; init; }
         }
 
         private sealed class BackgroundCandidate
@@ -36,8 +37,8 @@ namespace CodeExplainer.Engine.Strategies
             ActiveWindowInfo window,
             ClipboardCompatibilityMode compatibilityMode,
             bool preferMsaaFirst,
-            bool allowMsaaFocusedFallback = true,
-            bool allowOcrFallback = true)
+            bool allowMsaaFocusedFallback = false,
+            bool allowOcrFallback = false)
         {
             bool isGoogleDocs = window.Title.IndexOf("Google Docs", System.StringComparison.OrdinalIgnoreCase) >= 0;
 
@@ -334,6 +335,17 @@ namespace CodeExplainer.Engine.Strategies
             int maxChars = 10000,
             string? selectedTextHint = null)
         {
+            if (CaptureScope.Current != null) CaptureScope.Current.SelectionHint = selectedTextHint;
+            if (UiAutomationCapture.TryGetNeighborLinesViaTextRange(maxChars, 30, 30, out string anchoredText)
+                && !string.IsNullOrWhiteSpace(selectedTextHint)
+                && anchoredText.Contains(selectedTextHint, System.StringComparison.Ordinal)
+                && ContextTextWindow.AddsContext(anchoredText, selectedTextHint))
+                return new BackgroundCaptureOutcome
+                {
+                    Text = ContextTextWindow.AroundSelection(anchoredText, selectedTextHint, maxChars),
+                    Method = CaptureMethod.IdeContextTextRange,
+                    Status = "Background captured around the active selection without changing the editor."
+                };
             bool isVsCodeLike = IsVsCodeLike(window.ProcessName);
             var candidates = new List<BackgroundCandidate>();
 
@@ -473,54 +485,38 @@ namespace CodeExplainer.Engine.Strategies
             return MetadataFallback(window, "Terminal background context unavailable; using window metadata.");
         }
 
-        public static async System.Threading.Tasks.Task<BackgroundCaptureOutcome> CaptureBrowserContainerBackground(ActiveWindowInfo window, int maxChars = 3000)
+        public static async Task<BackgroundCaptureOutcome> CaptureBrowserContainerBackground(
+            ActiveWindowInfo window, int maxChars = 6000, string? selectedTextHint = null)
         {
-            // Minimum threshold: UIA/MSAA returning < 30 chars typically means the container
-            // only echoed the selected word back (common in canvas-based apps like Google Docs).
-            const int MinUsableBackground = 30;
-
-            if (UiAutomationCapture.TryGetNearestContainerText(maxChars, out string containerText)
-                && !string.IsNullOrWhiteSpace(containerText)
-                && containerText.Length >= MinUsableBackground)
+            if (CaptureScope.Current != null) CaptureScope.Current.SelectionHint = selectedTextHint;
+            var sources = new (BackgroundTextSource Read, CaptureMethod Method)[]
             {
-                return new BackgroundCaptureOutcome
-                {
-                    Text = containerText,
-                    Method = CaptureMethod.UiaTreeContainer,
-                    Status = "Browser background captured from nearest UIA container."
-                };
+                ((int limit, out string value) => UiAutomationCapture.TryGetNeighborLinesViaTextRange(limit, 20, 20, out value), CaptureMethod.IdeContextTextRange),
+                (UiAutomationCapture.TryGetVisibleRangesText, CaptureMethod.UiaTextPatternVisibleRanges),
+                (UiAutomationCapture.TryGetNearestContainerText, CaptureMethod.UiaTreeContainer),
+                ((int limit, out string value) => MsaaCapture.TryGetContainerText(window.Hwnd, limit, out value), CaptureMethod.MsaaContainer)
+            };
+            foreach (var source in sources)
+            {
+                if (source.Read(maxChars, out string value) && ContextTextWindow.AddsContext(value, selectedTextHint))
+                    return new BackgroundCaptureOutcome
+                    {
+                        Text = ContextTextWindow.AroundSelection(value, selectedTextHint, maxChars),
+                        Method = source.Method,
+                        Status = "Background captured from the active content surface."
+                    };
             }
-
-            if (MsaaCapture.TryGetContainerText(window.Hwnd, maxChars, out string msaaText)
-                && !string.IsNullOrWhiteSpace(msaaText)
-                && msaaText.Length >= MinUsableBackground)
-            {
-                RuntimeLog.Info("CapturePipeline", $"MSAA browser context used for {window.ProcessName}.");
+            var ocr = await OcrCapture.CaptureWithConfidenceAsync(window);
+            if (ocr.IsUsable(OcrCapture.BackgroundThreshold) && ContextTextWindow.AddsContext(ocr.Text, selectedTextHint))
                 return new BackgroundCaptureOutcome
                 {
-                    Text = msaaText,
-                    Method = CaptureMethod.MsaaContainer,
-                    Status = "Browser background captured via MSAA container route."
-                };
-            }
-
-            // OCR fallback – for canvas-based apps like Google Docs where UIA/MSAA can't read the DOM
-            RuntimeLog.Info("CapturePipeline", $"UIA/MSAA browser background insufficient for {window.ProcessName}; attempting OCR fallback.");
-            var ocrText = await OcrCapture.CaptureAsync(window);
-            if (!string.IsNullOrWhiteSpace(ocrText))
-            {
-                RuntimeLog.Info("CapturePipeline", $"OCR background succeeded for {window.ProcessName} ({ocrText.Length} chars).");
-                return new BackgroundCaptureOutcome
-                {
-                    Text = ocrText,
+                    Text = ContextTextWindow.AroundSelection(ocr.Text, selectedTextHint, maxChars),
                     Method = CaptureMethod.OcrVisualCapture,
-                    Status = "Browser background captured via native OCR (canvas-based app detected)."
+                    OcrConfidence = ocr.Confidence,
+                    Status = "Visible background captured with OCR; offscreen content is unavailable."
                 };
-            }
-
-            return MetadataFallback(window, "Browser background context unavailable; using window metadata.");
+            return MetadataFallback(window, "Background unavailable; explanation will use the selection only.");
         }
-
 
         public static BackgroundCaptureOutcome CaptureFirefoxBackground(ActiveWindowInfo window, int maxChars = 3000)
         {
@@ -578,7 +574,7 @@ namespace CodeExplainer.Engine.Strategies
         {
             return new BackgroundCaptureOutcome
             {
-                Text = CaptureResult.BuildMetadataContext(window),
+                Text = string.Empty,
                 Method = CaptureMethod.WindowMetadata,
                 IsMetadataFallback = true,
                 Status = status
@@ -995,28 +991,7 @@ namespace CodeExplainer.Engine.Strategies
                 }
             }
 
-            var builder = new StringBuilder();
-            foreach (string line in keptLines)
-            {
-                if (builder.Length > 0)
-                {
-                    builder.Append('\n');
-                }
-
-                builder.Append(line);
-                if (builder.Length >= maxChars)
-                {
-                    break;
-                }
-            }
-
-            string output = builder.ToString().Trim();
-            if (output.Length > maxChars)
-            {
-                output = output.Substring(0, maxChars);
-            }
-
-            return output;
+            return ContextTextWindow.AroundSelection(string.Join("\n", keptLines).Trim(), selectedTextHint, maxChars);
         }
 
         private static int FindAnchorLineIndex(System.Collections.Generic.List<string> lines, string selectedTextHint)

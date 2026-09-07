@@ -21,27 +21,7 @@ namespace CodeExplainer.Engine.Strategies
 
             CapturePipelines.BackgroundCaptureOutcome background = await CapturePipelines.CaptureBrowserContainerBackground(
                 window,
-                maxChars: 3000);
-
-            // Echo detection: UIA/MSAA often returns just the selected text as "container" text
-            // in canvas-based apps (Google Docs). If background == selected, it's not useful context.
-            if (background.Method != CaptureMethod.OcrVisualCapture
-                && !string.IsNullOrWhiteSpace(selected.Text)
-                && !string.IsNullOrWhiteSpace(background.Text)
-                && string.Equals(background.Text.Trim(), selected.Text.Trim(), System.StringComparison.Ordinal))
-            {
-                RuntimeLog.Info("BrowserStrategy", $"Background echoed selected text for {window.ProcessName}; falling back to OCR.");
-                var ocrText = await OcrCapture.CaptureAsync(window);
-                if (!string.IsNullOrWhiteSpace(ocrText))
-                {
-                    background = new CapturePipelines.BackgroundCaptureOutcome
-                    {
-                        Text = ocrText,
-                        Method = CaptureMethod.OcrVisualCapture,
-                        Status = "Browser background captured via OCR (UIA echoed selected text)."
-                    };
-                }
-            }
+                maxChars: 6000, selectedTextHint: selected.Text);
 
             if (!selected.Success)
             {
@@ -55,7 +35,7 @@ namespace CodeExplainer.Engine.Strategies
                     background.Text);
             }
 
-            bool isPartial = background.IsMetadataFallback;
+            bool isPartial = background.IsMetadataFallback || background.Method == CaptureMethod.OcrVisualCapture;
             string combinedStatus = $"{selected.Status} {background.Status}".Trim();
 
             return new CaptureResult(
@@ -68,7 +48,9 @@ namespace CodeExplainer.Engine.Strategies
                 backgroundMethod: background.Method,
                 isPartial: isPartial,
                 isUnsupported: false,
-                statusMessage: combinedStatus);
+                statusMessage: combinedStatus,
+                ocrUsed: background.Method == CaptureMethod.OcrVisualCapture,
+                ocrConfidence: background.OcrConfidence);
         }
     }
 }

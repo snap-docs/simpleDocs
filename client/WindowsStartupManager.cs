@@ -85,8 +85,9 @@ namespace CodeExplainer
 
             if (processPath.EndsWith("dotnet.exe", StringComparison.OrdinalIgnoreCase))
             {
-                string? entryAssemblyPath = Assembly.GetEntryAssembly()?.Location;
-                if (string.IsNullOrWhiteSpace(entryAssemblyPath) || !File.Exists(entryAssemblyPath))
+                string? entryAssemblyName = Assembly.GetEntryAssembly()?.GetName().Name;
+                string entryAssemblyPath = Path.Combine(AppContext.BaseDirectory, $"{entryAssemblyName}.dll");
+                if (string.IsNullOrWhiteSpace(entryAssemblyName) || !File.Exists(entryAssemblyPath))
                 {
                     throw new InvalidOperationException("Unable to determine the application assembly path for Windows startup.");
                 }

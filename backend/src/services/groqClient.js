@@ -1,3 +1,5 @@
+import { readSseTokens } from './sseTokens.js';
+
 /**
  * Groq API client with streaming support.
  * Model is configurable via GROQ_MODEL environment variable.
@@ -31,10 +33,11 @@ function getApiKeys() {
   return keys;
 }
 
-async function requestCompletion(apiKey, systemPrompt, userPrompt, model) {
+async function requestCompletion(apiKey, systemPrompt, userPrompt, model, signal) {
   try {
     return await fetch(GROQ_API_URL, {
       method: 'POST',
+      signal,
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
@@ -64,20 +67,19 @@ async function requestCompletion(apiKey, systemPrompt, userPrompt, model) {
  * @param {string} userPrompt - User message
  * @returns {AsyncGenerator<string>} Token stream
  */
-export async function* streamCompletion(systemPrompt, userPrompt) {
+export async function* streamCompletion(systemPrompt, userPrompt, { signal = AbortSignal.timeout(90000) } = {}) {
   const apiKeys = getApiKeys();
   if (apiKeys.length === 0) {
-    yield '[Error: GROQ_API_KEY not configured. Set it in backend/.env]';
-    return;
+    throw new Error('GROQ_API_KEY is not configured.');
   }
 
-  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
   let response;
   let lastError = null;
   for (let i = 0; i < apiKeys.length; i++) {
     try {
-      response = await requestCompletion(apiKeys[i], systemPrompt, userPrompt, model);
+      response = await requestCompletion(apiKeys[i], systemPrompt, userPrompt, model, signal);
     } catch (err) {
       lastError = err;
       if (i < apiKeys.length - 1) {
@@ -97,53 +99,19 @@ export async function* streamCompletion(systemPrompt, userPrompt) {
       continue;
     }
 
-    yield `[${lastError.message}]`;
-    return;
+    throw lastError;
   }
 
   if (!response) {
     throw lastError ?? new Error('Groq request failed before a response was received.');
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      // Process SSE lines
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';  // Keep incomplete line in buffer
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === 'data: [DONE]') continue;
-        if (!trimmed.startsWith('data: ')) continue;
-
-        try {
-          const json = JSON.parse(trimmed.slice(6));
-          const content = json.choices?.[0]?.delta?.content;
-          if (content) {
-            yield content;
-          }
-        } catch {
-          // Skip malformed SSE chunks
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
+  yield* readSseTokens(response);
 }
 
 /**
  * Get the currently configured model name.
  */
 export function getModelName() {
-  return process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  return process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 }

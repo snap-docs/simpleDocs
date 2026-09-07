@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using System.Threading;
 using CodeExplainer.Engine.Classifiers;
 using CodeExplainer.Engine.Detectors;
 using CodeExplainer.Engine.Managers;
@@ -16,6 +17,7 @@ namespace CodeExplainer.Engine
     public class ContextCaptureEngine
     {
         private readonly ActiveWindowDetector _detector;
+        private int _captureRunning;
         private readonly EnvironmentClassifier _classifier;
         private readonly Dictionary<EnvironmentType, ICaptureStrategy> _strategies;
 
@@ -55,10 +57,33 @@ namespace CodeExplainer.Engine
         /// </summary>
         public async Task<CaptureResult> ExecuteCaptureAsync(int requestId)
         {
+            ActiveWindowInfo window = _detector.GetForegroundEnvironment();
+            if (Interlocked.CompareExchange(ref _captureRunning, 1, 0) != 0)
+                return CaptureResult.Unsupported(window, EnvironmentType.Unknown, CaptureMethod.Unsupported,
+                    CaptureMethod.None, "The previous accessibility provider is still busy. Please try again.");
+
+            Task<CaptureResult> capture = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = new CaptureScope(window);
+                    return await ExecuteCoreAsync(requestId, window);
+                }
+                finally { Interlocked.Exchange(ref _captureRunning, 0); }
+            });
+            try { return await capture.WaitAsync(TimeSpan.FromSeconds(8)); }
+            catch (TimeoutException)
+            {
+                return CaptureResult.Unsupported(window, EnvironmentType.Unknown, CaptureMethod.Unsupported,
+                    CaptureMethod.None, "Capture timed out. Try the editor bridge or enable the application's accessibility support.");
+            }
+        }
+
+        private async Task<CaptureResult> ExecuteCoreAsync(int requestId, ActiveWindowInfo activeWindow)
+        {
             try
             {
                 // 1. Detect Active Window
-                ActiveWindowInfo activeWindow = _detector.GetForegroundEnvironment();
                 RuntimeLog.Info(
                     "Window",
                     $"req={requestId} process={activeWindow.ProcessName} title=\"{RuntimeLog.Preview(activeWindow.Title, 60)}\" class={activeWindow.ClassName} hwnd={activeWindow.Hwnd}");
@@ -77,6 +102,9 @@ namespace CodeExplainer.Engine
                     Debug.WriteLine($"[ContextCaptureEngine] Executing strategy: {strategy.GetType().Name}");
                     var stopwatch = Stopwatch.StartNew();
                     CaptureResult result = await strategy.CaptureAsync(activeWindow);
+                    if (CaptureScope.Current?.IsValid != true)
+                        return CaptureResult.Unsupported(activeWindow, envType, CaptureMethod.Unsupported,
+                            CaptureMethod.None, "Capture cancelled because the active window changed or the capture budget expired.");
                     string usageContext = UsageContextBuilder.Build(activeWindow, result.Type);
                     result = new CaptureResult(
                         selectedText: result.SelectedText,
@@ -137,9 +165,6 @@ namespace CodeExplainer.Engine
                 $"selected_chars={selectedChars} background_chars={backgroundChars} is_partial={result.IsPartial} is_unsupported={result.IsUnsupported} " +
                 $"status=\"{statusPreview}\" duration_ms={durationMs}");
 
-            // VERIFICATION LOGGING: Print full captured text to the log
-            RuntimeLog.Info("CaptureDEBUG", $"req={requestId} EXACT_SELECTED_TEXT_START\n{result.SelectedText}\nEXACT_SELECTED_TEXT_END");
-            RuntimeLog.Info("CaptureDEBUG", $"req={requestId} EXACT_BACKGROUND_CONTEXT_START\n{result.BackgroundContext}\nEXACT_BACKGROUND_CONTEXT_END");
         }
     }
 }

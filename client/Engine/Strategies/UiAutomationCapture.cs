@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Windows.Automation;
+using System.Linq;
+using System.Windows.Automation.Text;
 
 namespace CodeExplainer.Engine.Strategies
 {
@@ -13,7 +15,8 @@ namespace CodeExplainer.Engine.Strategies
         {
             try
             {
-                return AutomationElement.FocusedElement;
+                var scope = CaptureScope.Current;
+                return scope == null ? AutomationElement.FocusedElement : scope.IsValid ? scope.Focused : null;
             }
             catch
             {
@@ -29,10 +32,18 @@ namespace CodeExplainer.Engine.Strategies
                 return false;
             }
 
-            return ContainsTerminalHint(focused.Current.ClassName)
-                || ContainsTerminalHint(focused.Current.AutomationId)
-                || ContainsTerminalHint(focused.Current.Name)
-                || ContainsTerminalHint(focused.Current.HelpText);
+            foreach (var element in EnumerateFocusedAndAncestors(6))
+            {
+                try
+                {
+                    if (element.Current.ControlType == ControlType.Window) break;
+                    if (ContainsTerminalHint(element.Current.ClassName)
+                        || ContainsTerminalHint(element.Current.AutomationId)
+                        || ContainsTerminalHint(element.Current.Name)) return true;
+                }
+                catch { }
+            }
+            return false;
         }
 
         public static bool IsEditorContentFocusedElement()
@@ -184,7 +195,8 @@ namespace CodeExplainer.Engine.Strategies
             foreach (AutomationElement element in EnumerateFocusedAndAncestors(DefaultAncestorDepth))
             {
                 string? candidate = TryGetContainerCandidateText(element, maxChars);
-                if (!string.IsNullOrWhiteSpace(candidate))
+                if (!string.IsNullOrWhiteSpace(candidate)
+                    && ContextTextWindow.AddsContext(candidate, CaptureScope.Current?.SelectionHint))
                 {
                     text = candidate!;
                     return true;
@@ -226,17 +238,22 @@ namespace CodeExplainer.Engine.Strategies
 
             while (current != null && depth <= maxDepth)
             {
+                if (CaptureScope.Current?.IsValid == false) yield break;
+                if (Automation.Compare(current, AutomationElement.RootElement)) yield break;
                 yield return current;
+                if (current.Current.NativeWindowHandle == CaptureScope.Current?.Window.Hwnd.ToInt64()
+                    || current.Current.ControlType == ControlType.Window) yield break;
                 current = TryGetParent(current);
                 depth++;
             }
         }
 
-        private static bool TryGetSelectedTextFromElement(AutomationElement element, int maxChars, out string text)
+        internal static bool TryGetSelectedTextFromElement(AutomationElement element, int maxChars, out string text)
         {
             text = string.Empty;
             try
             {
+                if (element.Current.IsPassword || element.Current.IsOffscreen) return false;
                 if (element.TryGetCurrentPattern(TextPattern.Pattern, out object? patternObject) &&
                     patternObject is TextPattern textPattern)
                 {
@@ -249,7 +266,7 @@ namespace CodeExplainer.Engine.Strategies
                     var builder = new StringBuilder();
                     foreach (var range in selection)
                     {
-                        string? value = Normalize(range.GetText(-1), maxChars);
+                        string? value = Normalize(range.GetText(maxChars), maxChars);
                         if (!string.IsNullOrWhiteSpace(value))
                         {
                             if (builder.Length > 0)
@@ -281,7 +298,7 @@ namespace CodeExplainer.Engine.Strategies
             return false;
         }
 
-        private static bool TryGetNeighborLinesViaTextRangeFromElement(
+        internal static bool TryGetNeighborLinesViaTextRangeFromElement(
             AutomationElement element,
             int maxChars,
             int linesUp,
@@ -292,6 +309,7 @@ namespace CodeExplainer.Engine.Strategies
 
             try
             {
+                if (element.Current.IsPassword || element.Current.IsOffscreen) return false;
                 if (element.TryGetCurrentPattern(TextPattern.Pattern, out object? patternObject) &&
                     patternObject is TextPattern textPattern)
                 {
@@ -303,41 +321,16 @@ namespace CodeExplainer.Engine.Strategies
 
                     foreach (var selectedRange in selection)
                     {
+                        if (string.IsNullOrWhiteSpace(selectedRange.GetText(Math.Min(200, maxChars)))) continue;
                         var expanded = selectedRange.Clone();
+                        // Move cloned endpoints independently; enclosing-unit expansion can drop a multiline selection.
+                        expanded.MoveEndpointByUnit(TextPatternRangeEndpoint.Start, TextUnit.Character, -Math.Max(1, maxChars / 3));
+                        expanded.MoveEndpointByUnit(TextPatternRangeEndpoint.End, TextUnit.Character, Math.Max(1, maxChars / 3));
+                        string selectedValue = selectedRange.GetText(maxChars);
+                        string candidateText = expanded.GetText(maxChars * 2);
+                        text = ContextTextWindow.AroundSelection(candidateText, selectedValue, maxChars);
+                        if (ContextTextWindow.AddsContext(text, selectedValue)) return true;
 
-                        try
-                        {
-                            expanded.ExpandToEnclosingUnit(System.Windows.Automation.Text.TextUnit.Line);
-                        }
-                        catch
-                        {
-                            // Some providers do not support line expansion cleanly.
-                        }
-
-                        try
-                        {
-                            expanded.MoveEndpointByUnit(System.Windows.Automation.Text.TextPatternRangeEndpoint.Start, System.Windows.Automation.Text.TextUnit.Line, -linesUp);
-                        }
-                        catch
-                        {
-                            // Keep the available start if UIA cannot move further.
-                        }
-
-                        try
-                        {
-                            expanded.MoveEndpointByUnit(System.Windows.Automation.Text.TextPatternRangeEndpoint.End, System.Windows.Automation.Text.TextUnit.Line, linesDown);
-                        }
-                        catch
-                        {
-                            // Keep the available end if UIA cannot move further.
-                        }
-
-                        string? value = Normalize(expanded.GetText(maxChars), maxChars);
-                        if (!string.IsNullOrWhiteSpace(value))
-                        {
-                            text = value;
-                            return true;
-                        }
                     }
                 }
             }
@@ -365,7 +358,7 @@ namespace CodeExplainer.Engine.Strategies
             const int maxNodes = 500;
             const int maxDepth = 5;
 
-            while (queue.Count > 0 && inspected < maxNodes)
+            while (queue.Count > 0 && inspected < maxNodes && CaptureScope.Current?.IsValid != false)
             {
                 (AutomationElement element, int depth) = queue.Dequeue();
                 inspected++;
@@ -386,7 +379,7 @@ namespace CodeExplainer.Engine.Strategies
                 try
                 {
                     AutomationElement? child = walker.GetFirstChild(element);
-                    while (child != null && inspected < maxNodes)
+                    while (child != null && inspected + queue.Count < maxNodes)
                     {
                         queue.Enqueue((child, depth + 1));
                         child = walker.GetNextSibling(child);
@@ -412,7 +405,7 @@ namespace CodeExplainer.Engine.Strategies
             const int maxNodes = 1200;
             const int maxDepth = 7;
 
-            while (queue.Count > 0 && inspected < maxNodes)
+            while (queue.Count > 0 && inspected < maxNodes && CaptureScope.Current?.IsValid != false)
             {
                 (AutomationElement element, int depth) = queue.Dequeue();
                 inspected++;
@@ -431,7 +424,7 @@ namespace CodeExplainer.Engine.Strategies
                 try
                 {
                     AutomationElement? child = walker.GetFirstChild(element);
-                    while (child != null && inspected < maxNodes)
+                    while (child != null && inspected + queue.Count < maxNodes)
                     {
                         queue.Enqueue((child, depth + 1));
                         child = walker.GetNextSibling(child);
@@ -463,7 +456,7 @@ namespace CodeExplainer.Engine.Strategies
             const int maxNodes = 500;
             const int maxDepth = 5;
 
-            while (queue.Count > 0 && inspected < maxNodes)
+            while (queue.Count > 0 && inspected < maxNodes && CaptureScope.Current?.IsValid != false)
             {
                 (AutomationElement element, int depth) = queue.Dequeue();
                 inspected++;
@@ -482,7 +475,7 @@ namespace CodeExplainer.Engine.Strategies
                 try
                 {
                     AutomationElement? child = walker.GetFirstChild(element);
-                    while (child != null && inspected < maxNodes)
+                    while (child != null && inspected + queue.Count < maxNodes)
                     {
                         queue.Enqueue((child, depth + 1));
                         child = walker.GetNextSibling(child);
@@ -512,7 +505,7 @@ namespace CodeExplainer.Engine.Strategies
 
                     foreach (var range in selection)
                     {
-                        if (!string.IsNullOrWhiteSpace(Normalize(range.GetText(-1), 200)))
+                        if (!string.IsNullOrWhiteSpace(Normalize(range.GetText(200), 200)))
                         {
                             return true;
                         }
@@ -537,7 +530,7 @@ namespace CodeExplainer.Engine.Strategies
             const int maxNodes = 1000;
             const int maxDepth = 7;
 
-            while (queue.Count > 0 && inspected < maxNodes)
+            while (queue.Count > 0 && inspected < maxNodes && CaptureScope.Current?.IsValid != false)
             {
                 (AutomationElement element, int depth) = queue.Dequeue();
                 inspected++;
@@ -555,7 +548,7 @@ namespace CodeExplainer.Engine.Strategies
                 try
                 {
                     AutomationElement? child = walker.GetFirstChild(element);
-                    while (child != null && inspected < maxNodes)
+                    while (child != null && inspected + queue.Count < maxNodes)
                     {
                         queue.Enqueue((child, depth + 1));
                         child = walker.GetNextSibling(child);
@@ -575,9 +568,12 @@ namespace CodeExplainer.Engine.Strategies
             text = string.Empty;
             try
             {
+                if (element.Current.IsPassword || element.Current.IsOffscreen) return false;
                 if (element.TryGetCurrentPattern(TextPattern.Pattern, out object? patternObject) &&
                     patternObject is TextPattern textPattern)
                 {
+                    if (TryGetNeighborLinesViaTextRangeFromElement(element, maxChars, 30, 30, out text))
+                        return true;
                     string? value = Normalize(textPattern.DocumentRange.GetText(maxChars), maxChars);
                     if (!string.IsNullOrWhiteSpace(value))
                     {
@@ -599,6 +595,7 @@ namespace CodeExplainer.Engine.Strategies
             text = string.Empty;
             try
             {
+                if (element.Current.IsPassword || element.Current.IsOffscreen) return false;
                 if (element.TryGetCurrentPattern(TextPattern.Pattern, out object? patternObject) &&
                     patternObject is TextPattern textPattern)
                 {
@@ -611,7 +608,7 @@ namespace CodeExplainer.Engine.Strategies
                     var builder = new StringBuilder();
                     foreach (var range in ranges)
                     {
-                        string? value = Normalize(range.GetText(-1), maxChars);
+                        string? value = Normalize(range.GetText(maxChars), maxChars);
                         if (!string.IsNullOrWhiteSpace(value))
                         {
                             if (builder.Length > 0)
@@ -673,7 +670,7 @@ namespace CodeExplainer.Engine.Strategies
                 // Ignore and continue to name fallback.
             }
 
-            return Normalize(element.Current.Name, maxChars);
+            return null;
         }
 
         private static AutomationElement? TryGetParent(AutomationElement element)
@@ -705,10 +702,10 @@ namespace CodeExplainer.Engine.Strategies
             string joined =
                 $"{element.Current.Name} {element.Current.AutomationId} {element.Current.ClassName} {element.Current.HelpText}";
 
-            if (ContainsTerminalHint(joined))
-            {
-                return true;
-            }
+            if (element.Current.ControlType == ControlType.Window
+                || element.Current.ControlType == ControlType.Document
+                || element.Current.ControlType == ControlType.Edit) return false;
+            if (ContainsTerminalHint(joined)) return true;
 
             return ContainsAnyHint(joined,
                 "explorer",
@@ -766,6 +763,26 @@ namespace CodeExplainer.Engine.Strategies
                 }
             }
 
+            return false;
+        }
+
+        public static bool TryGetFocusedContentBounds(out System.Windows.Rect bounds)
+        {
+            bounds = System.Windows.Rect.Empty;
+            foreach (var element in EnumerateFocusedAndAncestors(6))
+            {
+                try
+                {
+                    if (element.Current.IsPassword) return false;
+                    if (element.Current.ControlType == ControlType.Window) break;
+                    var rect = element.Current.BoundingRectangle;
+                    if (!element.Current.IsOffscreen && rect.Width >= 150 && rect.Height >= 100
+                        && (element.Current.ControlType == ControlType.Document
+                            || element.TryGetCurrentPattern(TextPattern.Pattern, out _)))
+                    { bounds = rect; return true; }
+                }
+                catch { }
+            }
             return false;
         }
 

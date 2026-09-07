@@ -1,3 +1,5 @@
+import { readSseTokens } from './sseTokens.js';
+
 /**
  * Gemini API client with streaming support.
  * Model is configurable via GEMINI_MODEL environment variable.
@@ -15,10 +17,11 @@ function getApiKey() {
   return trimmed;
 }
 
-async function requestCompletion(apiKey, systemPrompt, userPrompt, model) {
+async function requestCompletion(apiKey, systemPrompt, userPrompt, model, signal) {
   try {
     return await fetch(GEMINI_API_URL, {
       method: 'POST',
+      signal,
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
@@ -53,61 +56,21 @@ async function requestCompletion(apiKey, systemPrompt, userPrompt, model) {
  * @param {string} userPrompt - User message
  * @returns {AsyncGenerator<string>} Token stream
  */
-export async function* streamCompletion(systemPrompt, userPrompt) {
+export async function* streamCompletion(systemPrompt, userPrompt, { signal = AbortSignal.timeout(90000) } = {}) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    yield '[Error: GEMINI_API_KEY not configured. Set GEMINI_API_KEY or GOOGLE_API_KEY in backend/.env]';
-    return;
+    throw new Error('gemini API key is not configured.');
   }
 
   const model = getModelName();
-  const response = await requestCompletion(apiKey, systemPrompt, userPrompt, model);
+  const response = await requestCompletion(apiKey, systemPrompt, userPrompt, model, signal);
 
   if (!response.ok) {
     const errorBody = await response.text();
-    yield `[Gemini error ${response.status}: ${errorBody}]`;
-    return;
+    throw new Error('gemini provider request failed: ' + response.status);
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === 'data: [DONE]') {
-          continue;
-        }
-
-        if (!trimmed.startsWith('data: ')) {
-          continue;
-        }
-
-        try {
-          const payload = JSON.parse(trimmed.slice(6));
-          const content = payload.choices?.[0]?.delta?.content;
-          if (content) {
-            yield content;
-          }
-        } catch {
-          // Skip malformed SSE chunks.
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
+  yield* readSseTokens(response);
 }
 
 /**

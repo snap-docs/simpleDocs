@@ -4,13 +4,13 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using CodeExplainer;
-using IDataObject = System.Windows.IDataObject;
 
 namespace CodeExplainer.Engine.Managers
 {
     public class ClipboardManager
     {
+        private static readonly SemaphoreSlim CaptureLock = new(1, 1);
+
         public class ClipboardCaptureOutcome
         {
             public string? CapturedText { get; init; }
@@ -22,207 +22,106 @@ namespace CodeExplainer.Engine.Managers
         [DllImport("user32.dll")]
         private static extern uint GetClipboardSequenceNumber();
 
-        /// <summary>
-        /// Executes an action that modifies the clipboard, backing up and restoring
-        /// the user's original clipboard content safely. 
-        /// Runs on the STA thread.
-        /// </summary>
         public async Task<ClipboardCaptureOutcome> SafeCaptureSelectionAsync(Func<Task> captureAction)
         {
-            string? capturedText = null;
-            bool clipboardChanged = false;
-            bool clipboardMutatedDuringRequest = false;
-            bool differsFromPreviousText = false;
-
-            await Application.Current.Dispatcher.InvokeAsync(async () =>
+            await CaptureLock.WaitAsync();
+            try
             {
-                IDataObject? originalData = null;
-                string? originalText = null;
-                uint sequenceBeforeRequest = GetClipboardSequenceNumber();
-
-                try
+                return await Application.Current.Dispatcher.InvokeAsync(async () =>
                 {
-                    // 1. Backup clipboard
-                    originalData = GetClipboardDataWithRetry();
-                    originalText = TryReadClipboardText();
-                    ClearClipboardWithRetry();
-
-                    // 2. Perform capture (e.g. simulate Ctrl+C)
-                    await captureAction();
-
-                    // 3. Read captured text with a short polling window.
-                    // Some apps (especially browser surfaces) populate clipboard asynchronously.
-                    capturedText = await WaitForClipboardTextAsync();
-                    if (!string.IsNullOrWhiteSpace(capturedText))
+                    DataObject? snapshot = null;
+                    uint before = GetClipboardSequenceNumber();
+                    uint capturedSequence = before;
+                    bool restore = false;
+                    string? previousText = null;
+                    try
                     {
-                        differsFromPreviousText = !string.Equals(capturedText, originalText, StringComparison.Ordinal);
-                        clipboardChanged = differsFromPreviousText;
-                    }
-                    else
-                    {
-                        RuntimeLog.Warn("Clipboard", "Timed out waiting for clipboard text after capture action.");
-                    }
+                        // Materialize delayed clipboard data before the source application replaces it.
+                        (snapshot, previousText) = await MaterializeClipboardWithRetryAsync();
+                        if (snapshot == null && GetClipboardSequenceNumber() != 0)
+                            return new ClipboardCaptureOutcome();
+                        if (GetClipboardSequenceNumber() != before) return new ClipboardCaptureOutcome();
+                        await captureAction();
 
-                    uint sequenceAfterCapture = GetClipboardSequenceNumber();
-                    clipboardMutatedDuringRequest = sequenceAfterCapture != sequenceBeforeRequest;
-                }
-                catch (Exception ex)
-                {
-                    RuntimeLog.Error("Clipboard", $"Capture failed unexpectedly: {ex.Message}");
-                    Debug.WriteLine($"[ClipboardManager] Capture failed: {ex.Message}");
-                }
-                finally
-                {
-                    // 4. Restore original clipboard
-                    RestoreClipboardData(originalData);
-                }
-            }).Task.Unwrap();
-
-            return new ClipboardCaptureOutcome
-            {
-                CapturedText = capturedText,
-                ClipboardChanged = clipboardChanged,
-                ClipboardMutatedDuringRequest = clipboardMutatedDuringRequest,
-                DiffersFromPreviousText = differsFromPreviousText
-            };
-        }
-
-        private static async Task<string?> WaitForClipboardTextAsync(int timeoutMs = 1200, int pollMs = 80)
-        {
-            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-            while (DateTime.UtcNow < deadline)
-            {
-                string? text = TryReadClipboardText();
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    return text;
-                }
-
-                await Task.Delay(pollMs);
-            }
-
-            return null;
-        }
-
-        private static string? TryReadClipboardText()
-        {
-            // Prefer Unicode text, but handle bad clipboard data defensively.
-            // Some apps temporarily publish malformed/non-text clipboard payloads.
-            for (int attempt = 1; attempt <= 4; attempt++)
-            {
-                try
-                {
-                    IDataObject? dataObject = Clipboard.GetDataObject();
-                    if (dataObject == null)
-                    {
-                        return null;
-                    }
-
-                    if (dataObject.GetDataPresent(DataFormats.UnicodeText))
-                    {
-                        return dataObject.GetData(DataFormats.UnicodeText) as string;
-                    }
-
-                    if (dataObject.GetDataPresent(DataFormats.Text))
-                    {
-                        return dataObject.GetData(DataFormats.Text) as string;
-                    }
-
-                    if (dataObject.GetDataPresent(DataFormats.OemText))
-                    {
-                        return dataObject.GetData(DataFormats.OemText) as string;
-                    }
-
-                    return null;
-                }
-                catch (ExternalException ex)
-                {
-                    if (attempt == 1)
-                    {
-                        if (ex.HResult == unchecked((int)0x800401D3))
+                        var timer = Stopwatch.StartNew();
+                        string? captured = null;
+                        while (timer.ElapsedMilliseconds < 1200)
                         {
-                            RuntimeLog.Warn("Clipboard", "Clipboard contained invalid data format. Retrying.");
+                            capturedSequence = GetClipboardSequenceNumber();
+                            if (capturedSequence != before)
+                            {
+                                restore = true;
+                                try
+                                {
+                                    captured = Clipboard.ContainsText() ? Clipboard.GetText() : null;
+                                    if (!string.IsNullOrWhiteSpace(captured)) break;
+                                }
+                                catch (ExternalException) { }
+                            }
+                            await Task.Delay(60);
                         }
-                        else
+
+                        return new ClipboardCaptureOutcome
                         {
-                            RuntimeLog.Warn("Clipboard", $"Clipboard read unavailable ({ex.Message}). Retrying.");
+                            CapturedText = captured,
+                            ClipboardChanged = capturedSequence != before && !string.IsNullOrWhiteSpace(captured),
+                            ClipboardMutatedDuringRequest = capturedSequence != before,
+                            DiffersFromPreviousText = !string.Equals(captured, previousText, StringComparison.Ordinal)
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        RuntimeLog.Warn("Clipboard", $"Copy capture unavailable: {ex.GetType().Name}");
+                        return new ClipboardCaptureOutcome();
+                    }
+                    finally
+                    {
+                        // Do not overwrite a newer clipboard update that happened after our read.
+                        if (restore)
+                        {
+                            for (int attempt = 0; attempt < 4; attempt++)
+                            {
+                                if (GetClipboardSequenceNumber() != capturedSequence) break;
+                                try
+                                {
+                                    if (snapshot != null) Clipboard.SetDataObject(snapshot, true);
+                                    else Clipboard.Clear();
+                                    break;
+                                }
+                                catch (ExternalException)
+                                {
+                                    await Task.Delay(40);
+                                }
+                            }
                         }
                     }
-                }
-
-                Thread.Sleep(40);
+                }).Task.Unwrap();
             }
-
-            return null;
+            finally { CaptureLock.Release(); }
         }
 
-        private IDataObject? GetClipboardDataWithRetry(int maxRetries = 5, int delayMs = 50)
+        private static async Task<(DataObject? Snapshot, string? Text)> MaterializeClipboardWithRetryAsync()
         {
-            for (int i = 0; i < maxRetries; i++)
+            for (int attempt = 0; attempt < 8; attempt++)
             {
                 try
                 {
-                    return Clipboard.GetDataObject();
-                }
-                catch (ExternalException)
-                {
-                    RuntimeLog.Warn("Clipboard", $"Clipboard locked on backup, retrying {i + 1}/{maxRetries}.");
-                    Debug.WriteLine($"[ClipboardManager] Clipboard locked on backup, retrying {i + 1}/{maxRetries}...");
-                    Thread.Sleep(delayMs);
-                }
-            }
-            return null;
-        }
+                    IDataObject? original = Clipboard.GetDataObject();
+                    if (original == null) return (new DataObject(), null);
 
-        private static void ClearClipboardWithRetry(int maxRetries = 5, int delayMs = 40)
-        {
-            for (int i = 0; i < maxRetries; i++)
-            {
-                try
-                {
-                    Clipboard.Clear();
-                    return;
-                }
-                catch (ExternalException ex)
-                {
-                    if (ex.HResult == unchecked((int)0x800401D3))
+                    var snapshot = new DataObject();
+                    foreach (string format in original.GetFormats(autoConvert: false))
                     {
-                        // Invalid existing data; treat as already cleared enough for capture flow.
-                        RuntimeLog.Warn("Clipboard", "Clipboard had invalid data while clearing. Continuing capture.");
-                        return;
+                        object? value = original.GetData(format, autoConvert: false);
+                        if (value != null) snapshot.SetData(format, value);
                     }
 
-                    Thread.Sleep(delayMs);
+                    return (snapshot, original.GetData(DataFormats.UnicodeText) as string);
                 }
+                catch (COMException) when (attempt < 7) { await Task.Delay(50); }
             }
 
-            RuntimeLog.Warn("Clipboard", "Failed to clear clipboard after max retries.");
-        }
-
-        private void RestoreClipboardData(IDataObject? data)
-        {
-            if (data == null)
-            {
-                ClearClipboardWithRetry();
-                return;
-            }
-
-            for (int i = 0; i < 5; i++)
-            {
-                try
-                {
-                    Clipboard.SetDataObject(data, copy: true);
-                    return;
-                }
-                catch (ExternalException)
-                {
-                    RuntimeLog.Warn("Clipboard", $"Clipboard locked on restore, retrying {i + 1}/5.");
-                    Debug.WriteLine($"[ClipboardManager] Clipboard locked on restore, retrying {i + 1}/5...");
-                    Thread.Sleep(50);
-                }
-            }
-            RuntimeLog.Warn("Clipboard", "Failed to restore clipboard after max retries.");
-            Debug.WriteLine("[ClipboardManager] FAILED to restore clipboard after max retries.");
+            return (null, null);
         }
     }
 }

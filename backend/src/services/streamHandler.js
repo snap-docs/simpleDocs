@@ -18,7 +18,7 @@ import { logger } from '../utils/logger.js';
  * @param {Object} data
  * @param {Object} ws - WebSocket instance
  */
-export async function handleStreamRequest(data, ws, authUser = null) {
+export async function handleStreamRequest(data, ws, authUser = null, { signal } = {}) {
   const startTime = Date.now();
   const timestampIso = new Date().toISOString();
   let requestStatus = 'completed';
@@ -105,7 +105,7 @@ export async function handleStreamRequest(data, ws, authUser = null) {
   }));
 
   try {
-    for await (const token of provider.streamCompletion(systemPrompt, userPrompt)) {
+    for await (const token of provider.streamCompletion(systemPrompt, userPrompt, { signal })) {
       if (timeToFirstTokenMs === null) {
         timeToFirstTokenMs = Date.now() - startTime;
       }
@@ -116,10 +116,8 @@ export async function handleStreamRequest(data, ws, authUser = null) {
   } catch (err) {
     requestStatus = 'stream_error';
     logger.error(`Stream error: ${err.message}`);
-    ws.send(JSON.stringify({ type: 'error', message: `Stream error: ${err.message}` }));
+    if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'error', message: 'The AI provider could not complete this request. Please retry.' }));
   }
-
-  ws.send(JSON.stringify({ type: 'complete' }));
 
   const totalResponseTimeMs = Date.now() - startTime;
   if (requestStatus === 'completed') {
@@ -148,6 +146,10 @@ export async function handleStreamRequest(data, ws, authUser = null) {
     response_text: responseParts.join(''),
     status: requestStatus
   });
+
+  if (requestStatus !== 'stream_error' && !signal?.aborted) {
+    ws.send(JSON.stringify({ type: 'complete' }));
+  }
 
   logger.info(`[WS] Complete in ${totalResponseTimeMs}ms`);
 }
