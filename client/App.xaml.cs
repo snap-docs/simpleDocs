@@ -64,7 +64,7 @@ namespace CodeExplainer
 
             // Create overlay (hidden initially)
             _overlayWindow = new OverlayWindow();
-            _overlayWindow.FeedbackHandler = SubmitFeedbackAsync;
+            if (_config.AuthEnabled) _overlayWindow.FeedbackHandler = SubmitFeedbackAsync;
 
             bool authenticated = await EnsureAuthenticatedAsync(interactive: true, "Sign in is required to start simpleDocs.");
             if (!authenticated)
@@ -213,9 +213,7 @@ namespace CodeExplainer
             if (Interlocked.CompareExchange(ref _isExplainInProgress, 1, 0) != 0)
             {
                 RuntimeLog.Warn("Hotkey", "Ignored because a previous explain request is still in progress.");
-                _overlayWindow?.ShowMessage(
-                    "A previous explain request is still running. Please wait a moment and try again.",
-                    "busy");
+                _overlayWindow?.SetStatus("Finishing the current request...");
                 return;
             }
 
@@ -254,6 +252,8 @@ namespace CodeExplainer
             if (_authSessionManager == null) return;
 
             await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
+
+            _overlayWindow?.Hide();
 
             // Execute the centralized engine capture pipeline
             var captureResult = await _captureEngine.ExecuteCaptureAsync(requestId);
@@ -331,6 +331,7 @@ namespace CodeExplainer
                     token => _overlayWindow?.AppendToken(token),
                     status => _overlayWindow?.SetStatus(status),
                     () => _overlayWindow?.OnStreamComplete(),
+                    onError: () => _overlayWindow?.OnStreamError(),
                     ocrUsed:       captureResult.OcrUsed,
                     ocrConfidence: captureResult.OcrConfidence
                 );
@@ -339,8 +340,10 @@ namespace CodeExplainer
             {
                 RuntimeLog.Warn("Overlay", $"req={requestId} {captureResult.StatusMessage}");
                 _overlayWindow?.ShowMessage(
-                    captureResult.StatusMessage,
-                    BuildStatusLabel(captureResult));
+                    captureResult.Type == EnvironmentType.IDE
+                        ? "Select text in the editor and press Ctrl+Shift+Space. If the editor extension was just updated, reload the editor window once."
+                        : "Select text in the application and press Ctrl+Shift+Space. This application may not expose its selection to Windows.",
+                    "Selection unavailable");
             }
         }
 

@@ -18,21 +18,21 @@ namespace CodeExplainer.Engine.Strategies
             [JsonPropertyName("background_context")] public string? BackgroundContext { get; set; }
         }
 
-        internal static bool IsValid(Snapshot? snapshot, string selectedText) =>
-            snapshot?.SelectedText != null && snapshot.BackgroundContext != null
+        internal static bool IsValid(Snapshot? snapshot, string? selectedText) =>
+            !string.IsNullOrWhiteSpace(snapshot?.SelectedText) && snapshot.BackgroundContext != null
             && snapshot.SelectedText.Length <= 5000 && snapshot.BackgroundContext.Length <= 10000
-            && Normalize(snapshot.SelectedText) == Normalize(selectedText)
+            && (selectedText == null || Normalize(snapshot.SelectedText) == Normalize(selectedText))
             && snapshot.BackgroundContext.Contains(snapshot.SelectedText, StringComparison.Ordinal)
-            && ContextTextWindow.AddsContext(snapshot.BackgroundContext, snapshot.SelectedText);
+            && (selectedText == null || ContextTextWindow.AddsContext(snapshot.BackgroundContext, snapshot.SelectedText));
 
         private static string Normalize(string value) => value.Replace("\r\n", "\n").Trim();
 
-        public static async Task<Snapshot?> TryCaptureAsync(string selection, string? directory = null)
+        public static async Task<Snapshot?> TryCaptureAsync(string? selection, string? directory = null)
         {
-            if (string.IsNullOrWhiteSpace(selection)) return null;
+            if (selection != null && string.IsNullOrWhiteSpace(selection)) return null;
             directory ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "CodeExplainer", "editor-bridge");
-            if (!Directory.Exists(directory)) return null;
+            if (!Directory.Exists(directory)) { RuntimeLog.Info("EditorBridge", "No active editor bridge directory."); return null; }
             using var budget = new CancellationTokenSource(TimeSpan.FromMilliseconds(650));
             try
             {
@@ -51,7 +51,8 @@ namespace CodeExplainer.Engine.Strategies
                         using var connection = new NamedPipeClientStream(".", pipe, PipeDirection.InOut,
                             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                         await connection.ConnectAsync(100, budget.Token);
-                        byte[] request = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "capture", token, selected_text = selection }) + "\n");
+                        byte[] request = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "capture", token, selected_text = selection,
+                            window_pid = CaptureScope.Current?.Window.ProcessId }) + "\n");
                         await connection.WriteAsync(request, budget.Token);
                         using var response = new MemoryStream();
                         byte[] chunk = new byte[4096];
@@ -65,10 +66,12 @@ namespace CodeExplainer.Engine.Strategies
                         }
                         if (response.Length > 131072) continue;
                         var snapshot = JsonSerializer.Deserialize<Snapshot>(response.ToArray());
-                        if (IsValid(snapshot, selection)) return snapshot;
+                        if (CaptureScope.Current?.IsValid != false && IsValid(snapshot, selection)) return snapshot;
+                        RuntimeLog.Info("EditorBridge", "Bridge responded without a valid focused selection.");
                     }
                     catch (Exception ex) when (ex is IOException or TimeoutException or JsonException
-                        or UnauthorizedAccessException or OperationCanceledException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException) { }
+                        or UnauthorizedAccessException or OperationCanceledException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException)
+                    { RuntimeLog.Info("EditorBridge", $"Bridge unavailable: {ex.GetType().Name}."); }
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }

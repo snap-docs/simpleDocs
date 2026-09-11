@@ -2,7 +2,7 @@
   "name": "simpledocs-context",
   "displayName": "simpleDocs Context",
   "description": "Provides selection-matched context from the active editor to the local simpleDocs Windows app.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "simpledocs",
   "license": "SEE LICENSE IN LICENSE",
   "repository": { "type": "git", "url": "https://github.com/snap-docs/simpleDocs.git" },

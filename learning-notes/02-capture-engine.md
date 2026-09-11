@@ -4,6 +4,65 @@ The capture engine is the most important technical feature in the project. It is
 
 The main entry point is `client/Engine/ContextCaptureEngine.cs`.
 
+## Repeated IDE Capture and the Editor Bridge
+
+Some editors draw selected text without exposing it through Windows UI Automation (UIA) or
+Microsoft Active Accessibility (MSAA). The old bridge flow first required native selected text
+and only then asked the extension for context. When the first step failed, the extension was
+never asked, so pressing the hotkey again repeated the same failure.
+
+`IDEStrategy.CaptureAsync` now checks for an embedded terminal first, then asks the local
+VS Code/Cursor extension for the selection itself. `EditorBridgeClient.TryCaptureAsync(null)`
+means "read the current editor selection." Passing a string instead means "return context only
+if it belongs to this selection." Native accessibility and clipboard compatibility remain the
+fallback when the extension is unavailable.
+
+`captureEditorContext` reads `activeTextEditor.selection` and a bounded range from its document
+each time a request arrives. It does not cache a previous selection, read the saved file from
+disk, or change the caret. This is why switching from one selected line to another and back
+works, and why unsaved edits appear in context. Selections are limited to 5,000 characters and
+the surrounding range to 10,000 characters. A document consisting entirely of selected text
+is still a valid selection, but the desktop marks its extra background as unavailable.
+
+The extension publishes a local named-pipe endpoint with a random token. The desktop validates
+the pipe format, connects as the same Windows user, sends the foreground process ID, and checks
+that the foreground window has not changed before accepting the result. The extension requires
+its window to be focused and rejects a mismatched known editor process ID. These checks prevent
+ordinary stale or other-window responses from being used; they do not isolate applications
+running under the same Windows user from each other.
+
+`CaptureScope.Focused` resolves the accessibility element only when a native path needs it.
+The scope also imposes a time budget and ties capture to one foreground window. The overlay
+uses `ShowActivated=false` and handles `WM_MOUSEACTIVATE` with `MA_NOACTIVATE`, allowing a click
+to dismiss it without taking focus away from the source editor. Each new request hides the
+old overlay before capturing.
+
+Capture support is application-dependent. The bridge supports VS Code/Cursor text editors;
+terminals, browsers, and other applications use their own capture strategies. A protected
+window or an application that exposes neither selection nor copy support can still fail.
+When pane focus is not exposed, a retained editor selection can be ambiguous. The app reports
+selection failure instead of sending an empty selection as if it were valid content.
+
+## Request Completion and Retry
+
+`BackendClient.SendExplainRequest` treats a provider error and a successful completion as
+different outcomes. `onError` ends loading and displays an error; `onComplete` renders the final
+response. A socket closing before either terminal message is a connection error, even if some
+tokens already arrived. This prevents a partial response from being labeled complete.
+
+The WebSocket close handshake has a two-second timeout. After a final response, cleanup errors
+cannot change that response's outcome. If the peer never acknowledges close, the client aborts
+the socket so the method can return. `App.OnHotkeyPressed` then releases its in-progress flag
+in `finally`, allowing the next hotkey request. Repeated presses during an active request update
+the status without erasing the current response. An empty completed stream displays a retry
+message instead of leaving the loading indicator running.
+
+The transport fixture exercises provider failure, recovery, early close, and a successful response
+followed by an abrupt transport close. The native fixture checks UIA selection, nearby context,
+and clipboard restoration. The extension integration test checks three real editor selections
+including a repeat, using an unsaved document. These checks verify those paths, not compatibility
+with every Windows application or availability of the hosted AI service.
+
 ## High-level Pipeline
 
 `ExecuteCaptureAsync` follows this order:

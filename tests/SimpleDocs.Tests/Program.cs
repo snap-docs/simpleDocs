@@ -20,6 +20,17 @@ internal static class Program
     {
         try
         {
+            if (args.Contains("--live-editor"))
+            {
+                using var editorProcess = System.Diagnostics.Process.GetProcessById(int.Parse(args[2]));
+                Win32Native.SetForegroundWindow(editorProcess.MainWindowHandle);
+                Thread.Sleep(350);
+                var captured = new ContextCaptureEngine().ExecuteCaptureAsync(1).GetAwaiter().GetResult();
+                Check(captured.SelectedMethod == CaptureMethod.EditorBridge, "real editor uses bridge as primary selection source");
+                Check(captured.SelectedText == args[1], "real editor returns current selection");
+                Check(captured.BackgroundContext.Contains("NEIGHBOR_CONTEXT"), "real editor returns unsaved background");
+                return 0;
+            }
             string selected = "const answer = calculateTotal(items);";
             string source = new string('a', 30000) + "\nNEARBY_BEFORE\n" + selected + "\nNEARBY_AFTER\n" + new string('b', 40000);
             string result = ContextTextWindow.AroundSelection(source, selected, 1000);
@@ -36,7 +47,11 @@ internal static class Program
             Check(!EditorBridgeClient.IsValid(new() { SelectedText = "stale", BackgroundContext = source }, selected), "stale bridge snapshot rejected");
             Check(!EditorBridgeClient.IsValid(new() { SelectedText = selected, BackgroundContext = selected }, selected), "bridge echo rejected");
             Check(!EditorBridgeClient.IsValid(new() { SelectedText = selected, BackgroundContext = source }, selected), "oversized bridge snapshot rejected");
+            Check(EditorBridgeClient.IsValid(new() { SelectedText = selected, BackgroundContext = selected }, null), "primary bridge accepts selection-only documents");
+            Check(!EditorBridgeClient.IsValid(new() { SelectedText = "", BackgroundContext = "" }, null), "primary bridge rejects missing selection");
+            if (args.Contains("--overlay")) RunOverlay();
             if (args.Contains("--bridge")) RunBridge();
+            if (args.Contains("--transport")) RunTransport().GetAwaiter().GetResult();
             if (args.Contains("--native")) RunNative();
             Console.WriteLine($"PASS {_checks} checks");
             return 0;
@@ -77,20 +92,13 @@ internal static class Program
                 Check(result.SelectedText == "line_1400", "native UIA provider captures the actual selection");
                 Check(result.BackgroundContext.Contains("line_1399") && result.BackgroundContext.Contains("line_1401"), "native UIA provider captures both neighboring lines late in document");
                 Check(text.SelectionStart == start && text.SelectionLength == length, "native capture preserves caret and selection");
-                var original = new DataObject();
-                var sourceClipboard = Clipboard.GetDataObject();
-                if (sourceClipboard != null)
-                    foreach (var format in sourceClipboard.GetFormats(false))
-                    {
-                        var data = sourceClipboard.GetData(format, false);
-                        if (data != null) original.SetData(format, data);
-                    }
+                var original = await SnapshotClipboardWithRetryAsync();
                 try
                 {
-                    Clipboard.SetText("repeat-copy-test");
-                    var copied = await new ClipboardManager().SafeCaptureSelectionAsync(() => { Clipboard.SetText("repeat-copy-test"); return Task.CompletedTask; });
+                    await SetTextWithRetryAsync("repeat-copy-test");
+                    var copied = await new ClipboardManager().SafeCaptureSelectionAsync(() => SetTextWithRetryAsync("repeat-copy-test"));
                     Check(copied.ClipboardChanged && copied.CapturedText == "repeat-copy-test", "repeated copy of identical text succeeds");
-                    var changed = await new ClipboardManager().SafeCaptureSelectionAsync(() => { Clipboard.SetText("new-copy-test"); return Task.CompletedTask; });
+                    var changed = await new ClipboardManager().SafeCaptureSelectionAsync(() => SetTextWithRetryAsync("new-copy-test"));
                     Check(changed.CapturedText == "new-copy-test" && Clipboard.GetText() == "repeat-copy-test", "clipboard contents restored after capture");
                 }
                 finally
@@ -107,6 +115,96 @@ internal static class Program
         };
         app.Run(window);
         if (failure != null) throw failure;
+    }
+
+    private static void RunOverlay()
+    {
+        var overlay = new CodeExplainer.OverlayWindow();
+        try
+        {
+            var label = (TextBlock)overlay.FindName("CaseLabel");
+            var loading = (FrameworkElement)overlay.FindName("LoadingPanel");
+            var feedback = (FrameworkElement)overlay.FindName("FeedbackPanel");
+            overlay.OnStreamComplete();
+            Check(label.Text == "Error" && loading.Visibility == Visibility.Collapsed,
+                "empty completed response ends loading with a retry error");
+            overlay.AppendToken("Synthetic explanation");
+            overlay.OnStreamComplete();
+            Check(label.Text.Contains("Done") && loading.Visibility == Visibility.Collapsed,
+                "successful response ends loading");
+            overlay.OnStreamError();
+            Check(label.Text == "Error" && feedback.Visibility == Visibility.Collapsed,
+                "failed response cannot offer success feedback");
+        }
+        finally { overlay.Close(); }
+    }
+
+    private static async Task SetTextWithRetryAsync(string value)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try { Clipboard.SetText(value); return; }
+            catch (System.Runtime.InteropServices.ExternalException) when (attempt < 12) { await Task.Delay(80); }
+        }
+    }
+
+    private static async Task<DataObject> SnapshotClipboardWithRetryAsync()
+    {
+        Exception? lastError = null;
+        for (int attempt = 0; attempt < 12; attempt++)
+        {
+            try
+            {
+                var original = new DataObject();
+                var source = Clipboard.GetDataObject();
+                if (source != null)
+                {
+                    foreach (var format in source.GetFormats(false))
+                    {
+                        var data = source.GetData(format, false);
+                        if (data != null) original.SetData(format, data);
+                    }
+                }
+                return original;
+            }
+            catch (System.Runtime.InteropServices.ExternalException ex) { lastError = ex; await Task.Delay(80); }
+        }
+        throw new InvalidOperationException("Cannot preserve the clipboard; native test cancelled.", lastError);
+    }
+
+    private static async Task RunTransport()
+    {
+        var info = new System.Diagnostics.ProcessStartInfo("node")
+        { RedirectStandardInput = true, RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+        info.ArgumentList.Add(System.IO.Path.GetFullPath("tests/SimpleDocs.Tests/transport-fixture.cjs"));
+        using var process = System.Diagnostics.Process.Start(info)!;
+        try
+        {
+            string port = (await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5)))!;
+            CodeExplainer.BackendClient.Configure(new CodeExplainer.ClientConfig { WsBaseUrl = "ws://127.0.0.1:" + port, AuthEnabled = false });
+            for (int i = 0; i < 4; i++)
+            {
+                int completed = 0;
+                int errors = 0;
+                string status = "";
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                await CodeExplainer.BackendClient.SendExplainRequest("synthetic", "", "Test", "test", "unknown", "test", "none",
+                    false, "", false, "", "transport-test", "test", onStatus: value => status = value,
+                    onComplete: () => completed++, onError: () => errors++);
+                Check(timer.Elapsed < TimeSpan.FromSeconds(5), "peer ignoring close cannot block the next request");
+                if (i == 0)
+                    Check(completed == 0 && errors == 1 && status == "Error", "provider failure ends loading without marking Done");
+                else if (i == 2)
+                    Check(completed == 0 && errors == 1 && status == "Connection error", "early close ends loading with an error");
+                else
+                    Check(completed == 1 && errors == 0, "next request completes exactly once after previous failure");
+            }
+        }
+        finally
+        {
+            process.StandardInput.WriteLine("stop");
+            if (!process.WaitForExit(5000)) process.Kill();
+        }
     }
 
     private static void RunBridge()

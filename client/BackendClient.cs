@@ -42,6 +42,7 @@ namespace CodeExplainer
             Action<string>? onToken = null,
             Action<string>? onStatus = null,
             Action? onComplete = null,
+            Action? onError = null,
             bool ocrUsed = false,
             float ocrConfidence = 0f)
         {
@@ -86,6 +87,7 @@ namespace CodeExplainer
                     streamCts.Token);
                 RuntimeLog.Info("Backend", $"req={requestId} stage=payload_sent");
 
+                bool receivedTerminalMessage = false;
                 while (ws.State == WebSocketState.Open)
                 {
                     string? message = await ReceiveFullMessageAsync(ws, streamCts.Token);
@@ -99,18 +101,29 @@ namespace CodeExplainer
                         onToken,
                         onStatus,
                         onComplete,
+                        onError,
                         requestId,
                         ref tokenChunks,
                         ref tokenChars);
                     if (!shouldContinue)
                     {
+                        receivedTerminalMessage = true;
                         break;
                     }
                 }
 
+                if (!receivedTerminalMessage)
+                    throw new WebSocketException("The server closed the connection before the explanation finished. Please try again.");
+
                 if (ws.State == WebSocketState.Open)
                 {
-                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "client_done", CancellationToken.None);
+                    using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "client_done", closeCts.Token); }
+                    catch (Exception ex) when (ex is OperationCanceledException or WebSocketException)
+                    {
+                        // The response is already final; transport cleanup must not change its outcome.
+                        ws.Abort();
+                    }
                 }
 
                 streamStopwatch.Stop();
@@ -127,7 +140,7 @@ namespace CodeExplainer
                 {
                     onToken?.Invoke($"\n[Connection error: {ex.Message}]");
                     onStatus?.Invoke("Connection error");
-                    onComplete?.Invoke();
+                    onError?.Invoke();
                 });
             }
         }
@@ -253,6 +266,7 @@ namespace CodeExplainer
             Action<string>? onToken,
             Action<string>? onStatus,
             Action? onComplete,
+            Action? onError,
             string requestLabel,
             ref int tokenChunks,
             ref int tokenChars)
@@ -303,7 +317,7 @@ namespace CodeExplainer
                             });
                         }
 
-                        RunOnUiThread(() => onComplete?.Invoke());
+                        RunOnUiThread(() => onError?.Invoke());
                         return false;
                     case "complete":
                         RuntimeLog.Info("Backend", $"req={requestLabel} stage=complete");

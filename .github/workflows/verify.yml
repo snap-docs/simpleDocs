@@ -29,5 +29,5 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - run: dotnet build client/CodeExplainer.csproj -c Release -nologo
-      - run: dotnet run --project tests/SimpleDocs.Tests/SimpleDocs.Tests.csproj -c Release -- --bridge
+      - run: dotnet run --project tests/SimpleDocs.Tests/SimpleDocs.Tests.csproj -c Release -- --bridge --transport --overlay
       - run: npm --prefix editor-extension test

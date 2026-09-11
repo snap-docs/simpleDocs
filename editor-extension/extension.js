@@ -9,7 +9,11 @@ async function activate(context) {
   if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
     try {
       bridge = await startBridge(path.join(process.env.LOCALAPPDATA, 'CodeExplainer', 'editor-bridge'),
-        selection => captureEditorContext(vscode, selection));
+        (selection, request) => {
+          const ownerPid = Number(process.env.VSCODE_PID);
+          if (request.window_pid && ownerPid && request.window_pid !== ownerPid) return null;
+          return captureEditorContext(vscode, selection);
+        });
       status = 'Context bridge is ready. Select text, then use the simpleDocs desktop hotkey.';
     } catch { status = 'Context bridge could not start. Reload the editor window to retry.'; }
   }

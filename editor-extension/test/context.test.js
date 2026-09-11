@@ -40,6 +40,14 @@ test('CRLF selections match normalized native clipboard text', () => {
   const source = 'first\r\nsecond';
   assert.ok(captureEditorContext(fixture(source, 0, source.length), 'first\nsecond'));
 });
+test('primary capture works without accessibility selection and reflects repeated selection changes', () => {
+  const api = fixture('before\nfirst\nsecond\nafter', 7, 5);
+  assert.equal(captureEditorContext(api, null).selected_text, 'first');
+  api.window.activeTextEditor.selection = { start: 13, end: 19, isEmpty: false };
+  assert.equal(captureEditorContext(api, null).selected_text, 'second');
+  api.window.activeTextEditor.selection.isEmpty = true;
+  assert.equal(captureEditorContext(api, null), null);
+});
 test('oversized selection does not read an unbounded document', () => {
   const api = fixture('x'.repeat(6000), 0, 6000);
   api.window.activeTextEditor.document.getText = () => { throw new Error('unexpected read'); };

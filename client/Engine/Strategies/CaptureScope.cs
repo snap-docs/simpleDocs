@@ -14,7 +14,25 @@ namespace CodeExplainer.Engine.Strategies
         private readonly CaptureScope? _previous;
         public static CaptureScope? Current => CurrentScope.Value;
         public ActiveWindowInfo Window { get; }
-        public AutomationElement? Focused { get; }
+        private AutomationElement? _focused;
+        private bool _focusResolved;
+        public AutomationElement? Focused
+        {
+            get
+            {
+                if (!_focusResolved && IsValid)
+                {
+                    _focusResolved = true;
+                    try
+                    {
+                        var element = AutomationElement.FocusedElement;
+                        if (BelongsToWindow(element, Window.Hwnd)) _focused = element;
+                    }
+                    catch { }
+                }
+                return _focused;
+            }
+        }
         public string? SelectionHint { get; set; }
         public bool IsValid => _elapsed.Elapsed < TimeSpan.FromSeconds(7)
             && Win32Native.GetForegroundWindow() == Window.Hwnd;
@@ -24,12 +42,6 @@ namespace CodeExplainer.Engine.Strategies
             Window = window;
             _previous = CurrentScope.Value;
             CurrentScope.Value = this;
-            try
-            {
-                var focused = AutomationElement.FocusedElement;
-                if (BelongsToWindow(focused, window.Hwnd)) Focused = focused;
-            }
-            catch { }
         }
 
         private static bool BelongsToWindow(AutomationElement? element, IntPtr hwnd)

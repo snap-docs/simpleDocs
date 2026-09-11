@@ -14,11 +14,24 @@ namespace CodeExplainer.Engine.Strategies
 
         public async Task<CaptureResult> CaptureAsync(ActiveWindowInfo window)
         {
-            bool embeddedTerminalFocused = UiAutomationCapture.IsTerminalFocusedElement();
-            if (embeddedTerminalFocused)
+            if (UiAutomationCapture.IsTerminalFocusedElement())
             {
                 RuntimeLog.Warn("IDE", "Embedded terminal focus detected. Rerouting to IDE terminal capture path.");
                 return await CaptureIdeEmbeddedTerminalAsync(window);
+            }
+
+            if (window.ProcessName.Equals("code", System.StringComparison.OrdinalIgnoreCase)
+                || window.ProcessName.Equals("cursor", System.StringComparison.OrdinalIgnoreCase))
+            {
+                var snapshot = await EditorBridgeClient.TryCaptureAsync(null);
+                if (snapshot != null)
+                {
+                    bool hasContext = ContextTextWindow.AddsContext(snapshot.BackgroundContext!, snapshot.SelectedText!);
+                    return new CaptureResult(snapshot.SelectedText!, hasContext ? snapshot.BackgroundContext! : string.Empty,
+                        window.Title, window.ProcessName, EnvironmentType.IDE, CaptureMethod.EditorBridge,
+                        hasContext ? CaptureMethod.EditorBridge : CaptureMethod.None, !hasContext, false,
+                        hasContext ? "Selected text and context captured from the editor." : "Selected text captured from the editor.");
+                }
             }
 
             return await CaptureIdeEditorAsync(window);

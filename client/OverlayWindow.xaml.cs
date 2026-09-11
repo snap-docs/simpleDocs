@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Interop;
 
 namespace CodeExplainer
 {
@@ -34,6 +35,7 @@ namespace CodeExplainer
         public OverlayWindow()
         {
             InitializeComponent();
+            SourceInitialized += (_, _) => HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(PreventActivation);
             Visibility = Visibility.Collapsed;
 
             // Dismiss on Escape
@@ -59,6 +61,16 @@ namespace CodeExplainer
             {
                 DragMove();
             };
+        }
+
+        private static IntPtr PreventActivation(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == 0x0021) // WM_MOUSEACTIVATE: clicking the overlay must preserve the source editor's focus.
+            {
+                handled = true;
+                return new IntPtr(3); // MA_NOACTIVATE
+            }
+            return IntPtr.Zero;
         }
 
         /// <summary>
@@ -138,10 +150,32 @@ namespace CodeExplainer
         {
             Dispatcher.Invoke(() =>
             {
+                LoadingPanel.Visibility = Visibility.Collapsed;
+                ContentScroller.Visibility = Visibility.Visible;
+                if (string.IsNullOrWhiteSpace(ResponseText.Text))
+                {
+                    ResponseText.Text = "No explanation was returned. Please try again.";
+                    OnStreamError();
+                    return;
+                }
                 CaseLabel.Text = "✓ Done";
                 SetStatusLabelColor("done");
                 ApplyCompactColorFormatting();
                 UpdateFeedbackVisibility();
+            });
+        }
+
+        public void OnStreamError()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                LoadingPanel.Visibility = Visibility.Collapsed;
+                ContentScroller.Visibility = Visibility.Visible;
+                CaseLabel.Text = "Error";
+                SetStatusLabelColor("error");
+                ApplyCompactColorFormatting();
+                _isResponseVisible = false;
+                HideFeedback();
             });
         }
 
@@ -360,7 +394,7 @@ namespace CodeExplainer
 
         private void UpdateFeedbackVisibility()
         {
-            FeedbackPanel.Visibility = _isResponseVisible ? Visibility.Visible : Visibility.Collapsed;
+            FeedbackPanel.Visibility = _isResponseVisible && FeedbackHandler != null ? Visibility.Visible : Visibility.Collapsed;
             UpdateFeedbackButtons();
         }
 

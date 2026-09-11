@@ -34,9 +34,9 @@ namespace CodeExplainer.Engine.Strategies
                 return null;
             }
 
-            if (!IsProcessWhitelisted(window.ProcessName))
+            if (!IsProcessWhitelisted(window.ProcessName) && !UiAutomationCapture.HasSelection())
             {
-                RuntimeLog.Info("CompatClipboard", $"Skipped for {window.ProcessName}: not in whitelist.");
+                RuntimeLog.Info("CompatClipboard", $"Skipped for {window.ProcessName}: no confirmed copy-compatible selection.");
                 return null;
             }
 

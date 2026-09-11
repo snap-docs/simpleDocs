@@ -26,7 +26,7 @@ async function startBridge(directory, capture) {
       try {
         const request = JSON.parse(buffer.slice(0, buffer.indexOf('\n')));
         if (request.token !== token || request.type !== 'capture') { socket.end('{}\n'); return; }
-        const result = capture(request.selected_text);
+        const result = capture(request.selected_text, request);
         socket.end(JSON.stringify(result || {}) + '\n');
       } catch { socket.end('{}\n'); }
     });
