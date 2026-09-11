@@ -10,7 +10,7 @@ The main architecture is intentionally preserved.
 - Native Windows capture pipeline using UIA, MSAA, clipboard fallback, console APIs, and OCR
 - Node.js backend with Hono
 - WebSocket streaming for live responses
-- Hosted Supabase/Postgres for auth and study logging
+- Optional Supabase/Postgres support for account-based deployments and study logging
 - Azure App Service for the hosted backend
 - Groq as the current primary model provider, with OpenRouter available as a backend-side fallback path
 
@@ -29,9 +29,10 @@ Implemented now:
 - native capture pipeline is in place
 - overlay streaming response flow is in place
 - short overlay-focused explanation style is in place
-- one-time redeem-code auth is implemented
+- production desktop builds now run without login or redeem codes
+- the older redeem-code auth implementation remains available for future protected deployments
 - Windows secure token storage with DPAPI is implemented
-- authenticated WebSocket explain flow is implemented
+- protected and anonymous WebSocket modes are implemented; current production builds use anonymous mode
 - hosted request logging is implemented
 - thumbs up / thumbs down feedback is implemented
 - thumbs feedback is stored in `request_logs.feedback_reaction`
@@ -54,16 +55,13 @@ Current remaining rollout work:
 ## Runtime Flow
 
 1. User launches the Windows client.
-2. The client restores the stored session or prompts for a redeem code.
-3. The client stores tokens securely on Windows using DPAPI.
-4. The app runs hidden to tray and registers the global hotkey.
+2. The app runs hidden to tray and registers the global hotkey without a login prompt.
 5. The user highlights text and presses the hotkey.
 6. The capture engine extracts selected text and surrounding context.
-7. The client sends the payload to the backend over an authenticated WebSocket.
+7. The client sends the payload to the backend over a WebSocket.
 8. The backend classifies the request and streams the explanation back in real time.
 9. The overlay renders the response immediately as tokens arrive.
-10. After stream completion, the backend writes one final `request_logs` row to the hosted DB.
-11. The user can submit a single thumbs up or thumbs down reaction for the visible response.
+10. Account-linked request logging and feedback are disabled in anonymous mode.
 
 ## Current Data Model
 
@@ -194,9 +192,9 @@ Remaining operational validation:
 ## Immediate Next Steps
 
 1. restore the hosted backend and database
-2. validate hosted health, auth, WebSocket streaming, logging, and feedback
+2. validate hosted health and anonymous WebSocket streaming
 3. validate the latest zip on one clean Windows machine
-4. issue redeem codes to internal pilot users
+4. configure Azure quotas and monitoring for the public endpoint
 5. rotate temporary development secrets before a wider external rollout
 
 ## Important Documents

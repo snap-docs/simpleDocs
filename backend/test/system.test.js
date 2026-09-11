@@ -26,9 +26,38 @@ test('protected routes reject missing tokens and malformed JSON bodies', async (
 });
 
 test('production rejects missing credentials and auth bypass', () => {
+  delete process.env.AUTH_MODE;
   process.env.SKIP_AUTH = 'true';
   try { assert.throws(() => validateRuntimeConfig('production'), /Unsafe production/); }
   finally { process.env.SKIP_AUTH = 'false'; }
+});
+
+test('intentional anonymous production mode accepts requests without login', async () => {
+  const previous = {
+    authMode: process.env.AUTH_MODE,
+    provider: process.env.AI_PROVIDER,
+    groqKey: process.env.GROQ_API_KEY
+  };
+  process.env.AUTH_MODE = 'anonymous';
+  process.env.SKIP_AUTH = 'false';
+  process.env.AI_PROVIDER = 'groq';
+  process.env.GROQ_API_KEY = 'synthetic-test-provider-key';
+  try {
+    assert.doesNotThrow(() => validateRuntimeConfig('production'));
+    const { app, wss } = createApp();
+    try {
+      const response = await app.request('/api/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selected_text: 'const anonymous = true;' })
+      });
+      assert.equal(response.status, 200);
+    } finally { wss.close(); }
+  } finally {
+    if (previous.authMode === undefined) delete process.env.AUTH_MODE; else process.env.AUTH_MODE = previous.authMode;
+    if (previous.provider === undefined) delete process.env.AI_PROVIDER; else process.env.AI_PROVIDER = previous.provider;
+    if (previous.groqKey === undefined) delete process.env.GROQ_API_KEY; else process.env.GROQ_API_KEY = previous.groqKey;
+  }
 });
 
 test('real WebSocket transport rejects null and oversized payloads', async () => {

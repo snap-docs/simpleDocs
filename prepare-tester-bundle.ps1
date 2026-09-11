@@ -22,7 +22,7 @@ if (-not (Test-Path $clientConfigPath)) {
 $clientConfig = Get-Content -LiteralPath $clientConfigPath -Raw | ConvertFrom-Json
 if ($EnvironmentName -eq "Production") {
     if ($clientConfig.Environment -ne "Production" -or
-        $clientConfig.Auth.Enabled -ne $true -or
+        $clientConfig.Auth.Enabled -ne $false -or
         $clientConfig.Backend.ApiBaseUrl -notmatch '^https://' -or
         $clientConfig.Backend.WsBaseUrl -notmatch '^wss://') {
         throw "Refusing to create a Production tester bundle from non-production client configuration."
@@ -75,7 +75,7 @@ simpleDocs tester bundle
 1. Extract this zip first
 2. Open the app folder
 3. Run CodeExplainer.exe
-4. Enter the redeem code you received
+4. No account or redeem code is required
 5. Use the configured hotkey inside your normal workflow
 6. The app starts with Windows by default and can be changed from the tray menu
 7. VS Code or Cursor users can install the optional VSIX in editor-extension for exact unsaved-buffer context

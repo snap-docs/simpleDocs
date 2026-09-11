@@ -70,4 +70,10 @@ jobs:
           app-name: 'simpleDocs'
           slot-name: 'Production'
           package: backend
+
+      - name: Configure anonymous access mode
+        run: |
+          resource_group=$(az webapp list --query "[?name=='simpleDocs'].resourceGroup | [0]" -o tsv)
+          test -n "$resource_group"
+          az webapp config appsettings set --resource-group "$resource_group" --name simpleDocs --settings AUTH_MODE=anonymous SKIP_AUTH=false
           

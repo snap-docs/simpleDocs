@@ -11,12 +11,13 @@
   - `GROQ_API_KEY`
   - `GROQ_API_KEY_FALLBACK` if used
   - `GROQ_MODEL` set to a model currently available to the deployment key
+- confirm `AUTH_MODE=anonymous`
 - confirm `SKIP_AUTH=false`
 - confirm `PUBLIC_APP_URL` matches the live Azure URL
 - save/apply the settings
 - restart the Azure Web App
 - confirm `https://<your-app>/api/health` returns `ok`
-- confirm `POST /auth/redeem-code` returns tokens for a fresh redeem code
+- confirm an unauthenticated WebSocket handshake is accepted
 
 ## 2. Database Readiness
 
@@ -35,7 +36,7 @@
   - `client/appsettings.Staging.json`
   - `client/appsettings.Production.json`
 - confirm `ApiBaseUrl` and `WsBaseUrl` point to the Azure backend
-- confirm auth is enabled in staging/production config
+- confirm auth is disabled in staging/production config
 
 ## 4. Build Output
 
@@ -65,15 +66,11 @@
 
 ## 5. Functional Verification
 
-- redeem-code login works against the hosted backend
-- access token refresh works after restart
-- logout works
-- authenticated WebSocket connect works
+- app starts without a login window
+- anonymous WebSocket connect works
 - one full explain request succeeds
 - overlay renders correctly
-- thumbs feedback works for one visible response
-- final request log row is inserted after completion
-- `feedback_reaction` updates when a thumb is clicked
+- account-linked feedback and request logging are not expected in anonymous mode
 - auto-start can be toggled from the tray menu
 
 ## 6. Data Verification
@@ -89,7 +86,7 @@ After one successful hosted test request, confirm these DB effects:
 ## 7. Operational Readiness
 
 - tester guide is packaged
-- redeem-code issuance list is tracked
+- Azure provider quotas and cost alerts are configured
 - privacy/support contact is prepared
 - internal pilot users are selected
 - development keys are rotated if necessary
@@ -99,7 +96,7 @@ After one successful hosted test request, confirm these DB effects:
 Release only if all are true:
 
 - hosted health works
-- hosted auth works
+- hosted anonymous streaming works
 - build works
 - DB logging works
 - feedback logging works

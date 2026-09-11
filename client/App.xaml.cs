@@ -101,12 +101,15 @@ namespace CodeExplainer
 
             var contextMenu = new ContextMenuStrip();
             _startupMenuItem = new ToolStripMenuItem("Start On Windows Login", null, (_, _) => ToggleStartupFromTray());
-            _signInMenuItem = new ToolStripMenuItem("Sign In", null, async (_, _) => await SignInFromTrayAsync());
-            _logoutMenuItem = new ToolStripMenuItem("Logout", null, async (_, _) => await LogoutFromTrayAsync());
             contextMenu.Items.Add(_startupMenuItem);
-            contextMenu.Items.Add(new ToolStripSeparator());
-            contextMenu.Items.Add(_signInMenuItem);
-            contextMenu.Items.Add(_logoutMenuItem);
+            if (_config?.AuthEnabled != false)
+            {
+                _signInMenuItem = new ToolStripMenuItem("Sign In", null, async (_, _) => await SignInFromTrayAsync());
+                _logoutMenuItem = new ToolStripMenuItem("Logout", null, async (_, _) => await LogoutFromTrayAsync());
+                contextMenu.Items.Add(new ToolStripSeparator());
+                contextMenu.Items.Add(_signInMenuItem);
+                contextMenu.Items.Add(_logoutMenuItem);
+            }
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add("Exit", null, (_, _) => ExitApp());
             _trayIcon.ContextMenuStrip = contextMenu;

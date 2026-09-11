@@ -33,16 +33,12 @@ The main file the tester should use is:
 3. Open the `app` folder.
 4. Double-click `CodeExplainer.exe`.
 5. If Windows shows a security prompt, choose the option to continue if the tester trusts the app source.
-6. Enter the redeem code when the sign-in window appears.
+6. No account, login, or redeem code is required.
 7. Wait until the tray icon shows the app is ready.
 
-## Daily use after first sign-in
+## Daily use
 
-The tester does not need to enter the redeem code every time.
-
-The app stores the signed-in session on that Windows user profile.
-
-After the first successful sign-in, the tester can simply:
+The tester can simply:
 
 1. Open the same extracted folder again.
 2. Double-click `app\CodeExplainer.exe`.
@@ -70,14 +66,7 @@ If we send a new zip later, the tester should:
 2. Extract the new zip to a fresh folder, or replace the old extracted folder.
 3. Launch the new `CodeExplainer.exe`.
 
-Normally they should still stay signed in as the same user on the same Windows account, because the auth state is stored separately on the machine.
-
-They only need a new redeem code if:
-
-- the local signed-in state was deleted
-- they use a different Windows user account
-- they move to a different machine
-- their session has been revoked or expired beyond recovery
+No account state needs to be migrated between versions or machines.
 
 ## Best folder recommendation for testers
 
@@ -115,7 +104,7 @@ Do not ask the tester to use PowerShell for normal usage.
 
 Ask them to report:
 
-- the redeem code or tester id
+- the app version
 - the time of the issue
 - the app they were using
 - what they selected
@@ -124,4 +113,4 @@ Ask them to report:
 
 ## Recommended message you can send to testers
 
-Extract the zip first, then open `app\CodeExplainer.exe`. Sign in once with your redeem code. After that, you can keep using the same app folder and open the exe whenever you want. The app also starts automatically with Windows by default, and you can change that later from the tray menu.
+Extract the zip first, then open `app\CodeExplainer.exe`. No login or redeem code is required. You can keep using the same app folder, and the app starts automatically with Windows by default unless you turn that off from the tray menu.

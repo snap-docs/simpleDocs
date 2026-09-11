@@ -20,7 +20,9 @@ export function validateRuntimeConfig(environmentName = 'development') {
   const errors = [];
   const normalizedEnvironment = String(environmentName).trim().toLowerCase();
   const isProduction = normalizedEnvironment === 'production';
-  const isProtectedMode = process.env.SKIP_AUTH !== 'true';
+  const authMode = (process.env.AUTH_MODE || 'protected').trim().toLowerCase();
+  const isAnonymousMode = authMode === 'anonymous';
+  const isProtectedMode = !isAnonymousMode && process.env.SKIP_AUTH !== 'true';
   const provider = (process.env.AI_PROVIDER || 'openrouter').trim().toLowerCase();
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,11 +40,19 @@ export function validateRuntimeConfig(environmentName = 'development') {
     warnings.push(message);
   };
 
-  if (process.env.SKIP_AUTH === 'true') {
+  if (!['protected', 'anonymous'].includes(authMode)) {
+    addIssue(`AUTH_MODE=${authMode} is not supported.`, true);
+  }
+
+  if (process.env.SKIP_AUTH === 'true' && !isAnonymousMode) {
     addIssue('SKIP_AUTH=true is enabled. Auth is bypassed for protected backend routes.', true);
   }
 
-  if (isBlank(supabaseUrl) || isPlaceholder(supabaseUrl)) {
+  if (isAnonymousMode) {
+    addIssue('AUTH_MODE=anonymous allows requests without user accounts. Protect provider spend with Azure quotas and monitoring.');
+  }
+
+  if (!isAnonymousMode && (isBlank(supabaseUrl) || isPlaceholder(supabaseUrl))) {
     addIssue('SUPABASE_URL is missing or still a placeholder.', true);
   }
 
@@ -57,7 +67,7 @@ export function validateRuntimeConfig(environmentName = 'development') {
     addIssue('SUPABASE_SERVICE_ROLE_KEY is missing. Redeem-code auth and request logging may fail against hosted DB policies.', true);
   }
 
-  if (!serviceRoleKey && anonKey) {
+  if (!isAnonymousMode && !serviceRoleKey && anonKey) {
     addIssue('Using SUPABASE_ANON_KEY fallback for DB access. This is not recommended for deployment.');
   }
 

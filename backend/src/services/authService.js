@@ -270,12 +270,12 @@ function ensureActiveRefreshToken(tokenRow, config) {
 }
 
 export function authenticateRequest(c, { allowQueryToken = false } = {}) {
-  if (process.env.SKIP_AUTH === 'true') {
+  if (process.env.AUTH_MODE === 'anonymous' || process.env.SKIP_AUTH === 'true') {
     return {
       ok: true,
       user: {
-        sub: 'local-dev',
-        participant_id: 'local-dev',
+        sub: process.env.AUTH_MODE === 'anonymous' ? 'anonymous' : 'local-dev',
+        participant_id: process.env.AUTH_MODE === 'anonymous' ? 'anonymous' : 'local-dev',
         type: 'access',
         bypassed: true
       }

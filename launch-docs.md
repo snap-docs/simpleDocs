@@ -61,13 +61,15 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ACCESS_TOKEN_SECRET=your_random_secret
+AUTH_MODE=anonymous
 SKIP_AUTH=false
 PUBLIC_APP_URL=https://your-azure-app.azurewebsites.net
 ```
 
 ### Important notes
 
-- `SKIP_AUTH=false` is required for hosted pilot deployment
+- `AUTH_MODE=anonymous` is required for this no-login distribution
+- `SKIP_AUTH=false` keeps the development bypass disabled
 - `SUPABASE_SERVICE_ROLE_KEY` should be present for auth and logging reliability
 - `ACCESS_TOKEN_SECRET` should be your own generated backend secret
 - add `GROQ_API_KEY_FALLBACK` in Azure if you want the hosted backend to use the secondary Groq key
@@ -152,7 +154,7 @@ npm run check:db
 Manual hosted checks:
 
 1. open `/api/health`
-2. test `/auth/redeem-code`
+2. test an unauthenticated WebSocket connection
 3. confirm the packaged app points to the hosted URLs
 4. confirm one request is logged in `request_logs`
 
@@ -161,22 +163,19 @@ Manual hosted checks:
 Before handing a build to testers, verify these manually:
 
 1. backend health endpoint responds
-2. redeem-code login succeeds
-3. access token refresh works after restart
-4. authenticated WebSocket connect succeeds
+2. the desktop app opens without a login prompt
+3. anonymous WebSocket connect succeeds
 5. one explanation is streamed back
-6. `participants`, `refresh_tokens`, and `request_logs` receive expected rows
-7. one visible response can store `feedback_reaction`
-8. logout revokes the refresh token cleanly
+6. Azure quotas and monitoring are active because the endpoint is public
 
 ## Support Inputs To Collect
 
 If a pilot tester reports an issue, collect:
 
-- tester redeem code or tester id
+- app version
 - time of the issue
 - application used when capture failed
-- whether sign-in worked
+- whether the app started without a login prompt
 - whether the overlay appeared
 - whether feedback was accepted
 - screenshots or local logs if available

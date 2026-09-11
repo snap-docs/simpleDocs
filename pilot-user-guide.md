@@ -1,9 +1,9 @@
 # Pilot User Guide
 
-## Sign In
+## Start The App
 
 1. Launch `CodeExplainer.exe`.
-2. Enter the redeem code you received if the sign-in window appears.
+2. No account, login, or redeem code is required.
 3. Wait for the tray icon to show that the app is ready.
 
 ## Use The App
@@ -33,13 +33,11 @@ For pilot testing, use the tool only on content that is allowed for the study.
 
 1. Check that your internet connection is working.
 2. Close and reopen the app.
-3. If sign-in fails, verify the redeem code with support.
-4. If the code is already used, ask support for a fresh code.
-5. If the app still fails, send support the time, the app you were using, and what you selected.
+3. If the app still fails, send support the time, the app you were using, and what you selected.
 
 ## What To Send Support
 
-- your tester code or tester id
+- your app version
 - when the problem happened
 - what app you were using
 - what text you selected

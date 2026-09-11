@@ -74,8 +74,8 @@ if ($EnvironmentName -eq "Production") {
         throw "Production package validation failed: Environment must be Production."
     }
 
-    if ($publishedConfig.Auth.Enabled -ne $true) {
-        throw "Production package validation failed: authentication must be enabled."
+    if ($publishedConfig.Auth.Enabled -ne $false) {
+        throw "Production package validation failed: this distribution must run without sign-in."
     }
 
     if ($publishedConfig.Backend.ApiBaseUrl -notmatch '^https://') {

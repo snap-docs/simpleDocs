@@ -36,7 +36,7 @@ function getConfig() {
 }
 
 export async function logCompletedRequest(record) {
-  if (!record?.participant_id || record.participant_id === 'unknown' || record.participant_id === 'local-dev') {
+  if (!record?.participant_id || ['unknown', 'local-dev', 'anonymous'].includes(record.participant_id)) {
     logger.warn('Skipping request log because participant_id is unavailable');
     return;
   }
@@ -62,7 +62,7 @@ export async function logCompletedRequest(record) {
 }
 
 export async function saveRequestFeedback(record) {
-  if (!record?.participant_id || record.participant_id === 'unknown' || record.participant_id === 'local-dev') {
+  if (!record?.participant_id || ['unknown', 'local-dev', 'anonymous'].includes(record.participant_id)) {
     logger.warn('Skipping request feedback because participant_id is unavailable');
     return false;
   }

@@ -56,7 +56,7 @@ Local development can use:
 }
 ```
 
-Hosted pilot builds should keep auth enabled and point to HTTPS/WSS backend URLs.
+Current hosted builds disable client login and use backend `AUTH_MODE=anonymous`. They must still point to HTTPS/WSS URLs.
 
 ## Backend Config
 
@@ -75,6 +75,7 @@ Important backend values:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ACCESS_TOKEN_SECRET`
 - `SKIP_AUTH`
+- `AUTH_MODE`
 - `REQUEST_LOGS_TABLE`
 
 `backend/.env` is ignored by git. Secrets should live there locally and in the host environment for deployment.
@@ -117,6 +118,7 @@ Hosted backend requirements:
 - internet access to Supabase
 - real environment variables
 - `SKIP_AUTH=false`
+- `AUTH_MODE=anonymous`
 - service role key for database writes
 - production `PUBLIC_APP_URL`
 
@@ -142,9 +144,8 @@ The active tables are:
 Before a pilot build goes out, verify:
 
 - backend health responds
-- redeem-code login works
-- token refresh works after restart
-- authenticated WebSocket streaming works
+- the app opens without a login prompt
+- anonymous WebSocket streaming works
 - one request appears in `request_logs`
 - feedback updates `feedback_reaction`
 - logout revokes refresh token
