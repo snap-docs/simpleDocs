@@ -81,6 +81,12 @@ jobs:
           test -n "$resource_group"
           az webapp config appsettings set --resource-group "$resource_group" --name simpleDocs --settings APP_ENV=production AI_PROVIDER=groq AUTH_MODE=anonymous SKIP_AUTH=false GROQ_MODEL=openai/gpt-oss-120b
 
+      - name: Ensure App Service is running
+        run: |
+          resource_group=$(az webapp list --query "[?name=='simpleDocs'].resourceGroup | [0]" -o tsv)
+          test -n "$resource_group"
+          az webapp start --resource-group "$resource_group" --name simpleDocs
+
       - name: Verify required Azure app settings
         run: |
           resource_group=$(az webapp list --query "[?name=='simpleDocs'].resourceGroup | [0]" -o tsv)
