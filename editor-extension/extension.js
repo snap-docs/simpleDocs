@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const path = require('node:path');
 const { startBridge } = require('./bridge');
 const { captureEditorContext } = require('./context');
+const { explainSelection } = require('./explain');
 let bridge;
 
 async function activate(context) {
@@ -18,7 +19,14 @@ async function activate(context) {
     } catch { status = 'Context bridge could not start. Reload the editor window to retry.'; }
   }
   context.subscriptions.push(vscode.commands.registerCommand('simpleDocs.contextStatus', () =>
-    vscode.window.showInformationMessage(status)));
+    vscode.window.showInformationMessage('simpleDocs Context ' + context.extension.packageJSON.version + ': ' + status)));
+  context.subscriptions.push(vscode.commands.registerCommand('simpleDocs.explainSelection', async () => {
+    try { return await explainSelection(vscode); }
+    catch (error) {
+      vscode.window.showErrorMessage(error.message || 'simpleDocs could not receive the selection.');
+      return false;
+    }
+  }));
 }
 
 async function deactivate() {

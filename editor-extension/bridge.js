@@ -37,7 +37,7 @@ async function startBridge(directory, capture) {
     server.listen(`\\\\.\\pipe\\${pipe}`, resolve);
   });
   server.on('error', () => {});
-  try { await fs.writeFile(manifest, JSON.stringify({ pipe, token }), { mode: 0o600 }); }
+  try { await fs.writeFile(manifest, JSON.stringify({ pipe, token, protocol: 2 }), { mode: 0o600 }); }
   catch (error) { server.close(); throw error; }
   return {
     async dispose() {

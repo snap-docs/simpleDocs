@@ -16,6 +16,7 @@ namespace CodeExplainer
         private NotifyIcon? _trayIcon;
         private GlobalHotkeyManager? _hotkeyManager;
         private ContextCaptureEngine? _captureEngine;
+        private EditorRequestServer? _editorRequestServer;
         private OverlayWindow? _overlayWindow;
         private MainWindow? _hiddenWindow;
         private int _isExplainInProgress;
@@ -88,6 +89,13 @@ namespace CodeExplainer
                 RuntimeLog.Error("Hotkey", "No global hotkey could be registered.");
             }
             RuntimeLog.Info("App", "Overlay window created. App is ready.");
+            try
+            {
+                _editorRequestServer = new EditorRequestServer(request =>
+                    Dispatcher.InvokeAsync(() => StartExplainRequest(request.ToCaptureResult())).Task);
+                RuntimeLog.Info("EditorCommand", "Direct editor command listener ready.");
+            }
+            catch (Exception ex) { RuntimeLog.Error("EditorCommand", $"Could not start: {ex.GetType().Name}"); }
         }
 
         private void SetupTrayIcon()
@@ -208,18 +216,26 @@ namespace CodeExplainer
             }
         }
 
-        private async void OnHotkeyPressed(object? sender, EventArgs e)
+        private void OnHotkeyPressed(object? sender, EventArgs e) => StartExplainRequest(null);
+
+        private bool StartExplainRequest(CaptureResult? directCapture)
         {
             if (Interlocked.CompareExchange(ref _isExplainInProgress, 1, 0) != 0)
             {
                 RuntimeLog.Warn("Hotkey", "Ignored because a previous explain request is still in progress.");
                 _overlayWindow?.SetStatus("Finishing the current request...");
-                return;
+                return false;
             }
 
             int requestId = Interlocked.Increment(ref _requestSequence);
             string hotkeyLabel = _hotkeyManager?.RegisteredHotkeyLabel ?? "unknown";
             RuntimeLog.Info("Flow", $"req={requestId} stage=hotkey_triggered key=\"{hotkeyLabel}\"");
+            _ = RunExplainRequestAsync(requestId, directCapture);
+            return true;
+        }
+
+        private async Task RunExplainRequestAsync(int requestId, CaptureResult? directCapture)
+        {
             var requestTimer = Stopwatch.StartNew();
             try
             {
@@ -230,7 +246,7 @@ namespace CodeExplainer
                     return;
                 }
 
-                await HandleExplainRequest(requestId);
+                await HandleExplainRequest(requestId, directCapture);
             }
             catch (Exception ex)
             {
@@ -246,17 +262,17 @@ namespace CodeExplainer
             }
         }
 
-        private async Task HandleExplainRequest(int requestId)
+        private async Task HandleExplainRequest(int requestId, CaptureResult? directCapture)
         {
             if (_captureEngine == null) return;
             if (_authSessionManager == null) return;
 
-            await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
+            if (directCapture == null) await HotkeyReleaseGuard.WaitForTriggerKeysToSettleAsync();
 
             _overlayWindow?.Hide();
 
             // Execute the centralized engine capture pipeline
-            var captureResult = await _captureEngine.ExecuteCaptureAsync(requestId);
+            var captureResult = directCapture ?? await _captureEngine.ExecuteCaptureAsync(requestId);
             RuntimeLog.Info(
                 "Capture",
                 $"req={requestId} process={captureResult.ProcessName} title=\"{RuntimeLog.Preview(captureResult.WindowTitle, 60)}\" env={captureResult.Type.ToApiValue()} " +
@@ -341,7 +357,7 @@ namespace CodeExplainer
                 RuntimeLog.Warn("Overlay", $"req={requestId} {captureResult.StatusMessage}");
                 _overlayWindow?.ShowMessage(
                     captureResult.Type == EnvironmentType.IDE
-                        ? "Select text in the editor and press Ctrl+Shift+Space. If the editor extension was just updated, reload the editor window once."
+                        ? "Use the editor's right-click menu: simpleDocs: Explain Selection, or press Ctrl+Alt+D. If that command is missing, install simpleDocs Context and run Developer: Reload Window."
                         : "Select text in the application and press Ctrl+Shift+Space. This application may not expose its selection to Windows.",
                     "Selection unavailable");
             }
@@ -517,6 +533,7 @@ namespace CodeExplainer
 
         protected override void OnExit(ExitEventArgs e)
         {
+            _editorRequestServer?.Dispose();
             _hotkeyManager?.Unregister();
             _trayIcon?.Dispose();
             base.OnExit(e);

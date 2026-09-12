@@ -2,7 +2,7 @@
   "name": "simpledocs-context",
   "displayName": "simpleDocs Context",
   "description": "Provides selection-matched context from the active editor to the local simpleDocs Windows app.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "simpledocs",
   "license": "SEE LICENSE IN LICENSE",
   "repository": { "type": "git", "url": "https://github.com/snap-docs/simpleDocs.git" },
@@ -13,6 +13,15 @@
   "main": "./extension.js",
   "scripts": { "test": "node --test test/*.test.js" },
   "contributes": {
-    "commands": [{ "command": "simpleDocs.contextStatus", "title": "simpleDocs: Context Bridge Status" }]
+    "commands": [
+      { "command": "simpleDocs.contextStatus", "title": "simpleDocs: Context Bridge Status" },
+      { "command": "simpleDocs.explainSelection", "title": "simpleDocs: Explain Selection", "enablement": "editorHasSelection && !editorHasMultipleSelections" }
+    ],
+    "menus": {
+      "editor/context": [{ "command": "simpleDocs.explainSelection", "when": "editorHasSelection && !editorHasMultipleSelections", "group": "navigation@10" }]
+    },
+    "keybindings": [
+      { "command": "simpleDocs.explainSelection", "key": "ctrl+alt+d", "when": "editorTextFocus && editorHasSelection && !editorHasMultipleSelections" }
+    ]
   }
 }

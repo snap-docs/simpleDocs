@@ -50,6 +50,7 @@ internal static class Program
             Check(EditorBridgeClient.IsValid(new() { SelectedText = selected, BackgroundContext = selected }, null), "primary bridge accepts selection-only documents");
             Check(!EditorBridgeClient.IsValid(new() { SelectedText = "", BackgroundContext = "" }, null), "primary bridge rejects missing selection");
             if (args.Contains("--overlay")) RunOverlay();
+            if (args.Contains("--desktop-bridge")) RunDesktopBridge().GetAwaiter().GetResult();
             if (args.Contains("--bridge")) RunBridge();
             if (args.Contains("--transport")) RunTransport().GetAwaiter().GetResult();
             if (args.Contains("--native")) RunNative();
@@ -115,6 +116,40 @@ internal static class Program
         };
         app.Run(window);
         if (failure != null) throw failure;
+    }
+
+    private static async Task RunDesktopBridge()
+    {
+        string directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "simpledocs-desktop-test-" + Guid.NewGuid());
+        var received = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using (var server = new CodeExplainer.EditorRequestServer(request =>
+        {
+            if (request.SelectedText == "__busy__") return Task.FromResult(false);
+            var capture = request.ToCaptureResult();
+            if (capture.SelectedMethod != CaptureMethod.EditorBridge || capture.UsageContext != "editor_command")
+                throw new Exception("Direct command must bypass native capture.");
+            received.Enqueue(capture.SelectedText);
+            return Task.FromResult(true);
+        }, directory))
+        {
+            var info = new System.Diagnostics.ProcessStartInfo("node")
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            info.ArgumentList.Add(System.IO.Path.GetFullPath("editor-extension/test/desktop-fixture.cjs"));
+            info.ArgumentList.Add(directory);
+            using var process = System.Diagnostics.Process.Start(info)!;
+            try
+            {
+                var output = process.StandardOutput.ReadToEndAsync();
+                var error = process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
+                Check(process.ExitCode == 0, "Node-to-desktop command protocol: " + await output + await error);
+                Check(received.SequenceEqual(new[] { "first", "second", "first", "after-busy" }),
+                    "desktop receives exact fresh selections; invalid and busy requests are not processed");
+            }
+            finally { if (!process.HasExited) process.Kill(); }
+        }
+        Check(!System.IO.Directory.EnumerateFiles(directory).Any(), "desktop removes discovery manifest on shutdown");
+        System.IO.Directory.Delete(directory);
     }
 
     private static void RunOverlay()

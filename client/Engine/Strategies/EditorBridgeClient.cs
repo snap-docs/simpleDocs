@@ -44,6 +44,12 @@ namespace CodeExplainer.Engine.Strategies
                     try
                     {
                         using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(file.FullName, budget.Token));
+                        if (selection == null && (!manifest.RootElement.TryGetProperty("protocol", out var protocol)
+                            || !protocol.TryGetInt32(out int version) || version < 2))
+                        {
+                            RuntimeLog.Warn("EditorBridge", "An older extension is still loaded. Reload the editor and use simpleDocs: Explain Selection.");
+                            continue;
+                        }
                         string pipe = manifest.RootElement.GetProperty("pipe").GetString() ?? "";
                         string token = manifest.RootElement.GetProperty("token").GetString() ?? "";
                         if (!System.Text.RegularExpressions.Regex.IsMatch(pipe, "^simpleDocs-editor-[0-9]+-[a-f0-9]{32}$")

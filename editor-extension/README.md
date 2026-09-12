@@ -6,19 +6,30 @@ It does not move the caret, copy whole files, scan a repository, or call an AI A
 
 ## Install and use
 
-1. Install the packaged `simpledocs-context-0.2.0.vsix` using **Extensions: Install from VSIX** in VS Code or Cursor.
+1. Install the packaged `simpledocs-context-0.3.0.vsix` using **Extensions: Install from VSIX** in VS Code or Cursor.
 2. Reload that editor window, then start the simpleDocs desktop executable.
 3. Highlight text in the editor and press the simpleDocs hotkey (normally Ctrl+Shift+Space).
 4. The desktop app asks this extension for the current selection and surrounding context before trying native selection capture.
 
+For the most reliable IDE workflow, select code and use the editor context menu command
+**simpleDocs: Explain Selection**, or press **Ctrl+Alt+D**. This command snapshots the active
+unsaved editor buffer inside VS Code/Cursor and sends it directly to the running simpleDocs
+desktop app. It does not use clipboard, UI Automation, MSAA, or OCR. The existing desktop
+**Ctrl+Shift+Space** hotkey remains available for browsers, terminals, and applications without
+the extension.
+
 Run **simpleDocs: Context Bridge Status** from the command palette to check readiness.
-For an unpackaged development checkout, open this folder in VS Code and launch an Extension Development Host with F5 after adding a standard extension launch configuration.
+If the command is missing after installation, run **Developer: Reload Window**. For an unpackaged
+development checkout, open this folder in VS Code and launch an Extension Development Host with
+F5 after adding a standard extension launch configuration.
 
 ## How matching works
 
 Each local extension host creates a randomly named Windows named pipe and a random authentication token.
 The discovery file is stored under `%LOCALAPPDATA%\CodeExplainer\editor-bridge` and removed on normal shutdown.
-The desktop app connects only to a pipe owned by the same Windows user. Stale or unavailable endpoints fall back to native capture.
+The desktop app connects only to a pipe owned by the same Windows user. Stale or unavailable endpoints fall back to native capture. The desktop also publishes a separate authenticated
+command pipe under `%LOCALAPPDATA%\\CodeExplainer\\desktop-bridge`; the extension uses that pipe
+for **Explain Selection** and waits for an acknowledgement before reporting success.
 
 The extension responds only when its window is focused and exactly one non-empty selection exists.
 The desktop request includes the foreground process ID; an extension with a different known editor process ID rejects it.
@@ -46,7 +57,7 @@ Remote documents are supported through the local UI extension host; remote-only 
 ## Development
 
 Run `npm test` for context and real Windows named-pipe tests. There are no runtime npm dependencies.
-Package with `npx @vscode/vsce package --no-dependencies --out ../dist/simpledocs-context-0.2.0.vsix`.
+Package with `npx @vscode/vsce package --no-dependencies --out ../dist/simpledocs-context-0.3.0.vsix`.
 
 For an interactive integration test, build `tests/SimpleDocs.Tests` in Release and launch VS Code
 with this directory as `--extensionDevelopmentPath` and `test/integration.cjs` as
