@@ -12,6 +12,12 @@ It does not document full product architecture or capture internals.
 
 The project is in hosted pilot stage.
 
+Production deployment is performed by GitHub Actions from the main branch. The workflow runs
+the backend checks and tests, deploys the tested backend package to the simpleDocs App Service
+with Azure OIDC credentials, applies the anonymous Groq runtime settings, checks the required
+runtime settings, and verifies the public health endpoint. A feature branch push runs verification
+only; it does not deploy production.
+
 Current live topology:
 
 - Windows WPF client runs on the tester machine

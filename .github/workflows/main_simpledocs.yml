@@ -1,13 +1,17 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - simpleDocs
+name: Build and deploy simpleDocs backend
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+
+concurrency:
+  group: simpledocs-production-deploy
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -33,8 +37,7 @@ jobs:
         run: |
           npm ci
           npm run check
-          npm run build --if-present
-          npm run test --if-present
+          npm test
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -75,5 +78,17 @@ jobs:
         run: |
           resource_group=$(az webapp list --query "[?name=='simpleDocs'].resourceGroup | [0]" -o tsv)
           test -n "$resource_group"
-          az webapp config appsettings set --resource-group "$resource_group" --name simpleDocs --settings AUTH_MODE=anonymous SKIP_AUTH=false
+          az webapp config appsettings set --resource-group "$resource_group" --name simpleDocs --settings APP_ENV=production AI_PROVIDER=groq AUTH_MODE=anonymous SKIP_AUTH=false GROQ_MODEL=openai/gpt-oss-120b
+
+      - name: Verify required Azure app settings
+        run: |
+          resource_group=$(az webapp list --query "[?name=='simpleDocs'].resourceGroup | [0]" -o tsv)
+          settings=$(az webapp config appsettings list --resource-group "$resource_group" --name simpleDocs --query "[].name" -o tsv)
+          for required in APP_ENV AI_PROVIDER AUTH_MODE SKIP_AUTH GROQ_MODEL; do
+            grep -qx "$required" <<< "$settings" || { echo "Missing Azure app setting: $required"; exit 1; }
+          done
+
+      - name: Verify deployed health endpoint
+        run: |
+          curl --fail --show-error --silent --retry 5 --retry-delay 10 --max-time 30 https://simpledocs-e3ahgecnbaf2dcfu.centralindia-01.azurewebsites.net/api/health
           
