@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Net.Http;
 using CodeExplainer.Engine;
 using CodeExplainer.Engine.Managers;
 using CodeExplainer.Engine.Models;
@@ -49,6 +50,12 @@ internal static class Program
             Check(!EditorBridgeClient.IsValid(new() { SelectedText = selected, BackgroundContext = source }, selected), "oversized bridge snapshot rejected");
             Check(EditorBridgeClient.IsValid(new() { SelectedText = selected, BackgroundContext = selected }, null), "primary bridge accepts selection-only documents");
             Check(!EditorBridgeClient.IsValid(new() { SelectedText = "", BackgroundContext = "" }, null), "primary bridge rejects missing selection");
+            var safeDefaults = new CodeExplainer.ClientConfig();
+            Check(safeDefaults.EnvironmentName == "Production" && safeDefaults.ApiBaseUrl.StartsWith("https://")
+                && safeDefaults.WsBaseUrl.StartsWith("wss://") && !safeDefaults.AuthEnabled,
+                "missing sidecar configuration defaults to hosted no-login production");
+            Check(safeDefaults.WebSocketConnectTimeoutSeconds <= 8 && safeDefaults.WebSocketRetryCount == 1,
+                "production connection failure is bounded before HTTPS fallback");
             if (args.Contains("--overlay")) RunOverlay();
             if (args.Contains("--desktop-bridge")) RunDesktopBridge().GetAwaiter().GetResult();
             if (args.Contains("--bridge")) RunBridge();
@@ -216,7 +223,14 @@ internal static class Program
         try
         {
             string port = (await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5)))!;
-            CodeExplainer.BackendClient.Configure(new CodeExplainer.ClientConfig { WsBaseUrl = "ws://127.0.0.1:" + port, AuthEnabled = false });
+            CodeExplainer.BackendClient.Configure(new CodeExplainer.ClientConfig
+            {
+                ApiBaseUrl = "http://127.0.0.1:" + port,
+                WsBaseUrl = "ws://127.0.0.1:" + port,
+                AuthEnabled = false,
+                WebSocketConnectTimeoutSeconds = 2,
+                WebSocketRetryCount = 1
+            });
             for (int i = 0; i < 4; i++)
             {
                 int completed = 0;
@@ -234,6 +248,34 @@ internal static class Program
                 else
                     Check(completed == 1 && errors == 0, "next request completes exactly once after previous failure");
             }
+
+            CodeExplainer.BackendClient.Configure(new CodeExplainer.ClientConfig
+            {
+                ApiBaseUrl = "http://127.0.0.1:" + port,
+                WsBaseUrl = "ws://127.0.0.1:1",
+                AuthEnabled = false,
+                WebSocketConnectTimeoutSeconds = 2,
+                WebSocketRetryCount = 1
+            });
+            int fallbackCompleted = 0;
+            int fallbackErrors = 0;
+            string fallbackText = "";
+            var fallbackTimer = System.Diagnostics.Stopwatch.StartNew();
+            await CodeExplainer.BackendClient.SendExplainRequest("synthetic", "", "Test", "test", "unknown", "test", "none",
+                false, "", false, "", "transport-http-fallback", "test", onToken: value => fallbackText += value,
+                onComplete: () => fallbackCompleted++, onError: () => fallbackErrors++);
+            Check(fallbackTimer.Elapsed < TimeSpan.FromSeconds(5), "blocked WebSocket switches to HTTPS without a long retry delay");
+            Check(fallbackCompleted == 1 && fallbackErrors == 0 && fallbackText == "HTTP fallback explanation",
+                "HTTPS fallback returns an explanation and completes exactly once");
+
+            CodeExplainer.BackendClient.Configure(new CodeExplainer.ClientConfig
+            {
+                ApiBaseUrl = "http://127.0.0.1:3000",
+                WsBaseUrl = "ws://127.0.0.1:3000",
+                AuthEnabled = false
+            });
+            Check(CodeExplainer.BackendClient.BuildConnectionErrorMessage(new HttpRequestException()).Contains("local development server"),
+                "local configuration failure identifies the missing local server");
         }
         finally
         {

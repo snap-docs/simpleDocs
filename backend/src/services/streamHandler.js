@@ -154,7 +154,7 @@ export async function handleStreamRequest(data, ws, authUser = null, { signal } 
   logger.info(`[WS] Complete in ${totalResponseTimeMs}ms`);
 }
 
-function getProviderClient(providerName) {
+export function getProviderClient(providerName) {
   switch ((providerName || '').trim().toLowerCase()) {
     case 'gemini':
     case 'google':

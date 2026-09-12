@@ -54,75 +54,103 @@ namespace CodeExplainer
             string cleanWindowTitle = TextSanitizer.SanitizePayloadText(windowTitle, 400);
             string cleanProcessName = TextSanitizer.SanitizePayloadText(processName, 100);
             string cleanStatusMessage = TextSanitizer.SanitizePayloadText(statusMessage, 240);
+            var payload = new
+            {
+                request_id         = requestId,
+                usage_context      = usageContext,
+                selected_text      = cleanSelectedText,
+                background_context = cleanBackgroundContext,
+                window_title       = cleanWindowTitle,
+                process_name       = cleanProcessName,
+                environment_type   = environmentType,
+                selected_method    = selectedMethod,
+                background_method  = backgroundMethod,
+                is_partial         = isPartial,
+                is_unsupported     = isUnsupported,
+                status_message     = cleanStatusMessage,
+                ocr_used           = ocrUsed,
+                ocr_confidence     = ocrConfidence
+            };
+            string jsonPayload = JsonSerializer.Serialize(payload);
 
             try
             {
-                using var ws = await ConnectWithRetryAsync(accessToken, requestId, cleanSelectedText.Length, cleanBackgroundContext.Length, environmentType, selectedMethod, backgroundMethod, isPartial, isUnsupported);
-                using var streamCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-
-                var payload = new
+                ClientWebSocket ws;
+                try
                 {
-                    request_id         = requestId,
-                    usage_context      = usageContext,
-                    selected_text      = cleanSelectedText,
-                    background_context = cleanBackgroundContext,
-                    window_title       = cleanWindowTitle,
-                    process_name       = cleanProcessName,
-                    environment_type   = environmentType,
-                    selected_method    = selectedMethod,
-                    background_method  = backgroundMethod,
-                    is_partial         = isPartial,
-                    is_unsupported     = isUnsupported,
-                    status_message     = cleanStatusMessage,
-                    ocr_used           = ocrUsed,
-                    ocr_confidence     = ocrConfidence
-                };
-
-                string jsonPayload = JsonSerializer.Serialize(payload);
-                var sendBuffer = Encoding.UTF8.GetBytes(jsonPayload);
-                await ws.SendAsync(
-                    new ArraySegment<byte>(sendBuffer),
-                    WebSocketMessageType.Text,
-                    true,
-                    streamCts.Token);
-                RuntimeLog.Info("Backend", $"req={requestId} stage=payload_sent");
-
-                bool receivedTerminalMessage = false;
-                while (ws.State == WebSocketState.Open)
+                    ws = await ConnectWithRetryAsync(accessToken, requestId, cleanSelectedText.Length, cleanBackgroundContext.Length, environmentType, selectedMethod, backgroundMethod, isPartial, isUnsupported);
+                }
+                catch (Exception webSocketError)
                 {
-                    string? message = await ReceiveFullMessageAsync(ws, streamCts.Token);
-                    if (message == null)
+                    RuntimeLog.Warn("Backend", $"req={requestId} stage=http_fallback reason={webSocketError.GetType().Name}");
+                    RunOnUiThread(() => onStatus?.Invoke("Connecting with HTTPS fallback..."));
+                    try
                     {
-                        break;
+                        string responseText = await SendExplainRequestHttpAsync(jsonPayload, accessToken, requestId);
+                        RunOnUiThread(() =>
+                        {
+                            onStatus?.Invoke($"{environmentType} | https_fallback");
+                            onToken?.Invoke(responseText);
+                            onComplete?.Invoke();
+                        });
+                        streamStopwatch.Stop();
+                        RuntimeLog.Info("Backend", $"req={requestId} stage=http_fallback_complete response_chars={responseText.Length} duration_ms={streamStopwatch.ElapsedMilliseconds}");
+                        return;
                     }
-
-                    bool shouldContinue = HandleSocketMessage(
-                        message,
-                        onToken,
-                        onStatus,
-                        onComplete,
-                        onError,
-                        requestId,
-                        ref tokenChunks,
-                        ref tokenChars);
-                    if (!shouldContinue)
+                    catch (Exception httpError)
                     {
-                        receivedTerminalMessage = true;
-                        break;
+                        throw new HttpRequestException(BuildConnectionErrorMessage(httpError), httpError);
                     }
                 }
 
-                if (!receivedTerminalMessage)
-                    throw new WebSocketException("The server closed the connection before the explanation finished. Please try again.");
-
-                if (ws.State == WebSocketState.Open)
+                using (ws)
                 {
-                    using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                    try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "client_done", closeCts.Token); }
-                    catch (Exception ex) when (ex is OperationCanceledException or WebSocketException)
+                    using var streamCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                    var sendBuffer = Encoding.UTF8.GetBytes(jsonPayload);
+                    await ws.SendAsync(
+                        new ArraySegment<byte>(sendBuffer),
+                        WebSocketMessageType.Text,
+                        true,
+                        streamCts.Token);
+                    RuntimeLog.Info("Backend", $"req={requestId} stage=payload_sent");
+
+                    bool receivedTerminalMessage = false;
+                    while (ws.State == WebSocketState.Open)
                     {
-                        // The response is already final; transport cleanup must not change its outcome.
-                        ws.Abort();
+                        string? message = await ReceiveFullMessageAsync(ws, streamCts.Token);
+                        if (message == null)
+                        {
+                            break;
+                        }
+
+                        bool shouldContinue = HandleSocketMessage(
+                            message,
+                            onToken,
+                            onStatus,
+                            onComplete,
+                            onError,
+                            requestId,
+                            ref tokenChunks,
+                            ref tokenChars);
+                        if (!shouldContinue)
+                        {
+                            receivedTerminalMessage = true;
+                            break;
+                        }
+                    }
+
+                    if (!receivedTerminalMessage)
+                        throw new WebSocketException("The server closed the connection before the explanation finished. Please try again.");
+
+                    if (ws.State == WebSocketState.Open)
+                    {
+                        using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                        try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "client_done", closeCts.Token); }
+                        catch (Exception ex) when (ex is OperationCanceledException or WebSocketException)
+                        {
+                            // The response is already final; transport cleanup must not change its outcome.
+                            ws.Abort();
+                        }
                     }
                 }
 
@@ -138,7 +166,7 @@ namespace CodeExplainer
                 System.Diagnostics.Debug.WriteLine($"BackendClient error: {ex.Message}");
                 RunOnUiThread(() =>
                 {
-                    onToken?.Invoke($"\n[Connection error: {ex.Message}]");
+                    onToken?.Invoke($"\n[{GetUserFacingError(ex)}]");
                     onStatus?.Invoke("Connection error");
                     onError?.Invoke();
                 });
@@ -240,6 +268,76 @@ namespace CodeExplainer
         {
             string baseUrl = _config.WsBaseUrl?.TrimEnd('/') ?? string.Empty;
             return new Uri($"{baseUrl}/ws/stream");
+        }
+
+        private static async Task<string> SendExplainRequestHttpAsync(string jsonPayload, string accessToken, string requestId)
+        {
+            using var handler = new SocketsHttpHandler
+            {
+                ConnectTimeout = TimeSpan.FromSeconds(Math.Max(2, _config.WebSocketConnectTimeoutSeconds))
+            };
+            using var client = new HttpClient(handler)
+            {
+                BaseAddress = new Uri(_config.ApiBaseUrl + "/"),
+                Timeout = TimeSpan.FromSeconds(100)
+            };
+            if (!string.IsNullOrWhiteSpace(accessToken))
+            {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            }
+
+            using var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await client.PostAsync("api/explain", content);
+            string body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                RuntimeLog.Warn("Backend", $"req={requestId} stage=http_fallback_failed status={(int)response.StatusCode}");
+                throw new HttpRequestException("The hosted service rejected the compatible request.", null, response.StatusCode);
+            }
+
+            using JsonDocument document = JsonDocument.Parse(body);
+            if (!document.RootElement.TryGetProperty("response_text", out JsonElement responseTextElement)
+                || string.IsNullOrWhiteSpace(responseTextElement.GetString()))
+            {
+                throw new InvalidOperationException("The hosted service returned an empty compatible response.");
+            }
+
+            return responseTextElement.GetString()!;
+        }
+
+        internal static string BuildConnectionErrorMessage(Exception error)
+        {
+            if (Uri.TryCreate(_config.ApiBaseUrl, UriKind.Absolute, out Uri? apiUri) && apiUri.IsLoopback)
+            {
+                return "This app is configured for a local development server, but that server is not running. Use the Production build.";
+            }
+
+            if (error is HttpRequestException httpError && httpError.StatusCode.HasValue)
+            {
+                return $"The hosted simpleDocs service is unavailable (HTTP {(int)httpError.StatusCode.Value}). Please try again shortly.";
+            }
+
+            return "Unable to reach the hosted simpleDocs service using WebSocket or HTTPS. Check the internet connection and try again.";
+        }
+
+        private static string GetUserFacingError(Exception error)
+        {
+            if (error is HttpRequestException)
+            {
+                return error.Message;
+            }
+
+            if (error is OperationCanceledException)
+            {
+                return "The explanation timed out. Please try again.";
+            }
+
+            if (error is WebSocketException)
+            {
+                return "The connection ended before the explanation finished. Please try again.";
+            }
+
+            return "The explanation could not be completed. Please try again.";
         }
 
         private static string MaskAccessToken(Uri uri)

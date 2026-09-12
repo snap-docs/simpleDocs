@@ -11,16 +11,19 @@ process.env.SKIP_AUTH = 'false';
 process.env.ACCESS_TOKEN_SECRET = 'synthetic-test-secret-never-used-in-production';
 const token = jwt.sign({ sub: 'local-dev', participant_id: 'local-dev', type: 'access' }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5m' });
 const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+async function* fakeCompletion() { yield 'Synthetic explanation'; }
 
 test('protected routes reject missing tokens and malformed JSON bodies', async () => {
-  const { app, wss } = createApp();
+  const { app, wss } = createApp({ explainStreamCompletion: fakeCompletion });
   try {
     assert.equal((await app.request('/api/health')).status, 200);
     assert.equal((await app.request('/api/explain', { method: 'POST' })).status, 401);
     for (const body of ['null', '[]', '"text"', '{}', '{broken']) {
       assert.equal((await app.request('/api/explain', { method: 'POST', headers, body })).status, 400);
     }
-    assert.equal((await app.request('/api/explain', { method: 'POST', headers, body: JSON.stringify({ selected_text: 'const answer = 42;' }) })).status, 200);
+    const explanation = await app.request('/api/explain', { method: 'POST', headers, body: JSON.stringify({ selected_text: 'const answer = 42;' }) });
+    assert.equal(explanation.status, 200);
+    assert.equal((await explanation.json()).response_text, 'Synthetic explanation');
     assert.equal((await app.request('/api/explain', { method: 'POST', headers, body: 'x'.repeat(70000) })).status, 413);
   } finally { wss.close(); }
 });
@@ -44,7 +47,7 @@ test('intentional anonymous production mode accepts requests without login', asy
   process.env.GROQ_API_KEY = 'synthetic-test-provider-key';
   try {
     assert.doesNotThrow(() => validateRuntimeConfig('production'));
-    const { app, wss } = createApp();
+    const { app, wss } = createApp({ explainStreamCompletion: fakeCompletion });
     try {
       const response = await app.request('/api/explain', {
         method: 'POST',
@@ -52,12 +55,29 @@ test('intentional anonymous production mode accepts requests without login', asy
         body: JSON.stringify({ selected_text: 'const anonymous = true;' })
       });
       assert.equal(response.status, 200);
+      assert.equal((await response.json()).response_text, 'Synthetic explanation');
     } finally { wss.close(); }
   } finally {
     if (previous.authMode === undefined) delete process.env.AUTH_MODE; else process.env.AUTH_MODE = previous.authMode;
     if (previous.provider === undefined) delete process.env.AI_PROVIDER; else process.env.AI_PROVIDER = previous.provider;
     if (previous.groqKey === undefined) delete process.env.GROQ_API_KEY; else process.env.GROQ_API_KEY = previous.groqKey;
   }
+});
+
+test('REST fallback reports provider failures without exposing provider details', async () => {
+  async function* failedCompletion() { throw new Error('synthetic private provider detail'); }
+  const { app, wss } = createApp({ explainStreamCompletion: failedCompletion });
+  try {
+    const response = await app.request('/api/explain', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ selected_text: 'const fallback = true;' })
+    });
+    assert.equal(response.status, 502);
+    const body = await response.json();
+    assert.match(body.error, /could not complete/i);
+    assert.doesNotMatch(body.error, /synthetic private provider detail/i);
+  } finally { wss.close(); }
 });
 
 test('real WebSocket transport rejects null and oversized payloads', async () => {

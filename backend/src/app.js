@@ -9,7 +9,7 @@ import { createFeedbackRoute } from './routes/feedback.js';
 import { authMiddleware } from './middleware/auth.js';
 import { authenticateRequest } from './services/authService.js';
 
-export function createApp() {
+export function createApp(options = {}) {
   const app = new Hono();
   const { injectWebSocket, upgradeWebSocket, wss } = createNodeWebSocket({ app });
   wss.options.maxPayload = 64 * 1024;
@@ -27,7 +27,7 @@ export function createApp() {
   app.use('/api/feedback', authMiddleware);
 
   // REST endpoint for explain
-  const explainRoute = createExplainRoute();
+  const explainRoute = createExplainRoute({ streamCompletion: options.explainStreamCompletion });
   app.route('/api', explainRoute);
   app.route('/api', createFeedbackRoute());
 

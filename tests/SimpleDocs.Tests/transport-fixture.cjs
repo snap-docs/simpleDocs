@@ -13,7 +13,16 @@ const server = net.createServer(socket => {
     if (!upgraded) {
       buffer += chunk.toString();
       if (!buffer.includes('\r\n\r\n')) return;
-      const key = /Sec-WebSocket-Key: (.*)\r\n/i.exec(buffer)[1].trim();
+      const keyMatch = /Sec-WebSocket-Key: (.*)\r\n/i.exec(buffer);
+      if (!keyMatch) {
+        const headerEnd = buffer.indexOf('\r\n\r\n');
+        const contentLength = Number(/Content-Length: (\d+)/i.exec(buffer)?.[1] || 0);
+        if (buffer.length < headerEnd + 4 + contentLength) return;
+        const body = JSON.stringify({ response_text: 'HTTP fallback explanation' });
+        socket.end(`HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`);
+        return;
+      }
+      const key = keyMatch[1].trim();
       const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
       socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
       upgraded = true;

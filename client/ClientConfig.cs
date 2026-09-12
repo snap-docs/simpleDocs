@@ -6,14 +6,16 @@ namespace CodeExplainer
 {
     internal sealed class ClientConfig
     {
-        public string EnvironmentName { get; init; } = "Development";
-        public string ApiBaseUrl { get; init; } = "http://localhost:3000";
-        public string WsBaseUrl { get; init; } = "ws://localhost:3000";
-        public bool AuthEnabled { get; init; } = true;
+        internal const string ProductionApiBaseUrl = "https://simpledocs-e3ahgecnbaf2dcfu.centralindia-01.azurewebsites.net";
+        internal const string ProductionWsBaseUrl = "wss://simpledocs-e3ahgecnbaf2dcfu.centralindia-01.azurewebsites.net";
+        public string EnvironmentName { get; init; } = "Production";
+        public string ApiBaseUrl { get; init; } = ProductionApiBaseUrl;
+        public string WsBaseUrl { get; init; } = ProductionWsBaseUrl;
+        public bool AuthEnabled { get; init; } = false;
         public int AuthRefreshSkewSeconds { get; init; } = 60;
-        public int WebSocketConnectTimeoutSeconds { get; init; } = 30;
-        public int WebSocketRetryCount { get; init; } = 3;
-        public int WebSocketRetryBaseDelayMs { get; init; } = 500;
+        public int WebSocketConnectTimeoutSeconds { get; init; } = 6;
+        public int WebSocketRetryCount { get; init; } = 1;
+        public int WebSocketRetryBaseDelayMs { get; init; } = 300;
 
         public static ClientConfig Load()
         {
@@ -24,13 +26,13 @@ namespace CodeExplainer
             string environmentName =
                 Environment.GetEnvironmentVariable("CODE_EXPLAINER_ENV")?.Trim()
                 ?? baseSettings.Environment?.Trim()
-                ?? "Development";
+                ?? "Production";
 
             Merge(settings, ReadConfigFile($"appsettings.{environmentName}.json"));
 
             string apiBaseUrl = GetEnvOverride("CODE_EXPLAINER_API_BASE_URL")
                 ?? settings.Backend.ApiBaseUrl
-                ?? "http://localhost:3000";
+                ?? ProductionApiBaseUrl;
 
             string wsBaseUrl = GetEnvOverride("CODE_EXPLAINER_WS_BASE_URL")
                 ?? settings.Backend.WsBaseUrl
@@ -41,11 +43,11 @@ namespace CodeExplainer
                 EnvironmentName = environmentName,
                 ApiBaseUrl = TrimTrailingSlash(apiBaseUrl),
                 WsBaseUrl = TrimTrailingSlash(wsBaseUrl),
-                AuthEnabled = ParseBoolOverride("CODE_EXPLAINER_AUTH_ENABLED", settings.Auth.Enabled, true),
+                AuthEnabled = ParseBoolOverride("CODE_EXPLAINER_AUTH_ENABLED", settings.Auth.Enabled, false),
                 AuthRefreshSkewSeconds = ParseIntOverride("CODE_EXPLAINER_AUTH_REFRESH_SKEW_SECONDS", settings.Auth.RefreshSkewSeconds, 60),
-                WebSocketConnectTimeoutSeconds = ParseIntOverride("CODE_EXPLAINER_WS_CONNECT_TIMEOUT_SECONDS", settings.Streaming.ConnectTimeoutSeconds, 30),
-                WebSocketRetryCount = ParseIntOverride("CODE_EXPLAINER_WS_RETRY_COUNT", settings.Streaming.RetryCount, 3),
-                WebSocketRetryBaseDelayMs = ParseIntOverride("CODE_EXPLAINER_WS_RETRY_BASE_DELAY_MS", settings.Streaming.RetryBaseDelayMs, 500)
+                WebSocketConnectTimeoutSeconds = ParseIntOverride("CODE_EXPLAINER_WS_CONNECT_TIMEOUT_SECONDS", settings.Streaming.ConnectTimeoutSeconds, 6),
+                WebSocketRetryCount = ParseIntOverride("CODE_EXPLAINER_WS_RETRY_COUNT", settings.Streaming.RetryCount, 1),
+                WebSocketRetryBaseDelayMs = ParseIntOverride("CODE_EXPLAINER_WS_RETRY_BASE_DELAY_MS", settings.Streaming.RetryBaseDelayMs, 300)
             };
         }
 
