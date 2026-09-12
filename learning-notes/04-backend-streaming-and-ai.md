@@ -1,6 +1,6 @@
 # Backend Streaming And AI
 
-The backend is a Node.js service using Hono. It exposes REST endpoints for health, auth, feedback, and explain metadata, plus a WebSocket endpoint for live streamed explanations.
+The backend is a Node.js service using Hono. It exposes REST endpoints for health, auth, feedback, and complete explanations, plus a WebSocket endpoint for live streamed explanations.
 
 The main files are:
 
@@ -83,6 +83,12 @@ WebSockets work well here because the desktop client can:
 - close after completion
 
 The backend treats the socket as one request lifecycle rather than a shared chat session.
+
+## HTTPS Fallback Flow
+
+`POST /api/explain` validates and sanitizes the same payload shape, classifies it, builds the same prompts, and collects provider tokens into `response_text`. The desktop uses this only when it cannot establish the WebSocket connection. It does not retry through HTTPS after a WebSocket payload was sent, because that could create a duplicate provider request and duplicate usage cost.
+
+The REST route returns `502` with a generic message when the provider fails or returns no text. Provider details stay in server logs rather than being exposed to desktop users.
 
 ## Classification
 

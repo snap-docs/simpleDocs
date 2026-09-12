@@ -9,20 +9,20 @@ The main architecture is intentionally preserved.
 - C# / .NET 8 / WPF desktop client
 - Native Windows capture pipeline using UIA, MSAA, clipboard fallback, console APIs, and OCR
 - Node.js backend with Hono
-- WebSocket streaming for live responses
+- WebSocket streaming for live responses with an HTTPS explanation fallback
 - Optional Supabase/Postgres support for account-based deployments and study logging
 - Azure App Service for the hosted backend
 - Groq as the current primary model provider, with OpenRouter available as a backend-side fallback path
 
 ## Current Product Status
 
-The codebase builds as a pilot candidate, but the hosted system is currently a release no-go.
+The codebase and hosted backend are ready for current pilot validation.
 
-Live check on 2026-08-30:
+Live check on 2026-09-12:
 
-- the configured Azure App Service returns `403` because the web app is stopped
-- the configured Supabase hostname does not resolve
-- the previously configured Groq model was retired and has been replaced in this branch with `openai/gpt-oss-120b`
+- GitHub Actions builds, tests, deploys, starts, and health-checks the Azure App Service
+- hosted health, anonymous WebSocket streaming, and HTTPS fallback requests pass
+- production desktop packages use Azure endpoints with no login and a bounded connection timeout
 
 Implemented now:
 
@@ -41,12 +41,11 @@ Implemented now:
 - client can start automatically with Windows using a Registry `Run` entry
 - Windows auto-start is ON by default and can be toggled from the tray menu
 - Groq fallback-key support is implemented in the backend
+- blocked WebSocket handshakes fall back to a normal HTTPS explanation request
 
 Current remaining rollout work:
 
-- restart/redeploy the Azure App Service and confirm its production environment
-- restore or replace the Supabase project and apply all migrations
-- set the hosted `GROQ_MODEL` to a currently available model
+- restore or replace Supabase only before enabling account-based deployments
 - run one final clean-machine launch of the packaged client outside the dev machine
 - validate the tester package on at least one additional Windows environment
 - complete internal pilot monitoring and support workflow
@@ -56,12 +55,12 @@ Current remaining rollout work:
 
 1. User launches the Windows client.
 2. The app runs hidden to tray and registers the global hotkey without a login prompt.
-5. The user highlights text and presses the hotkey.
-6. The capture engine extracts selected text and surrounding context.
-7. The client sends the payload to the backend over a WebSocket.
-8. The backend classifies the request and streams the explanation back in real time.
-9. The overlay renders the response immediately as tokens arrive.
-10. Account-linked request logging and feedback are disabled in anonymous mode.
+3. The user highlights text and presses the hotkey.
+4. The capture engine extracts selected text and surrounding context.
+5. The client sends the payload over WebSocket, or uses HTTPS if the WebSocket handshake is blocked.
+6. The backend classifies the request and generates the explanation.
+7. The overlay renders streamed tokens or the completed HTTPS response.
+8. Account-linked request logging and feedback are disabled in anonymous mode.
 
 ## Current Data Model
 

@@ -42,6 +42,10 @@ The environment is selected by `CODE_EXPLAINER_ENV` or the `Environment` propert
 
 The WebSocket URL can be provided directly. If it is missing, it is derived from the HTTP URL by changing `http` to `ws` and `https` to `wss`.
 
+If a packaged EXE is accidentally separated from its sidecar configuration, the compiled defaults are deliberately safe for users: Production, Azure HTTPS/WSS, and no login. Development builds still use the repository's explicit `appsettings.json` localhost values.
+
+Production allows one short WebSocket connection attempt. If that handshake cannot be established, `BackendClient` sends the same sanitized payload to `/api/explain` over HTTPS. This handles networks and proxies that permit HTTPS but block WebSockets without repeating a request that already reached the model.
+
 ## Tray Icon
 
 `SetupTrayIcon()` creates a Windows Forms `NotifyIcon` even though the main UI is WPF. That is normal in desktop apps because WinForms has a mature tray icon API.

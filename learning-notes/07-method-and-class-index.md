@@ -58,13 +58,17 @@ File: `client/BackendClient.cs`
 
 `Configure` stores client config for backend calls.
 
-`SendExplainRequest` sanitizes payload fields, opens a WebSocket, sends the explain payload, receives streamed messages, and calls overlay callbacks.
+`SendExplainRequest` sanitizes payload fields, opens a WebSocket, receives streamed messages, and falls back to one HTTPS explanation request only when the WebSocket handshake fails.
 
 `SendFeedbackAsync` posts feedback to `/api/feedback`.
 
 `ConnectWithRetryAsync` connects to `/ws/stream`, retrying according to config.
 
-`BuildWebSocketUri` builds the streaming URL and attaches the access token query parameter when present.
+`BuildWebSocketUri` builds the `/ws/stream` URL. When protected mode is enabled, `ConnectWithRetryAsync` sends the bearer token in the WebSocket request header.
+
+`SendExplainRequestHttpAsync` posts the sanitized payload to `/api/explain`, validates `response_text`, and returns the complete fallback explanation.
+
+`BuildConnectionErrorMessage` distinguishes a missing local development server, hosted HTTP rejection, and general network failure without exposing raw transport internals.
 
 `MaskAccessToken` redacts access tokens from log URLs.
 

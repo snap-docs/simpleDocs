@@ -11,7 +11,7 @@ User app
   -> Windows foreground window
   -> C# WPF tray client
   -> capture engine
-  -> authenticated WebSocket request
+  -> anonymous WebSocket request or HTTPS fallback
   -> Node/Hono backend
   -> AI provider stream
   -> overlay token rendering
@@ -26,7 +26,7 @@ The client uses C# with .NET 8 and WPF because the product needs native Windows 
 
 The capture layer uses Windows UI Automation, MSAA, clipboard compatibility mode, console APIs, and OCR fallbacks. Each method exists because different app families expose text differently. Editors, browsers, terminals, Electron apps, and external apps all need slightly different capture behavior.
 
-The backend uses Node.js with Hono because the server needs a compact HTTP and WebSocket surface. It handles health checks, auth routes, feedback routes, explain metadata routes, and the streaming endpoint.
+The backend uses Node.js with Hono because the server needs a compact HTTP and WebSocket surface. It handles health checks, optional auth routes, feedback routes, full HTTPS explanations, and the streaming endpoint.
 
 Supabase/Postgres is used for redeem-code auth and request logs. The client stores local tokens with Windows DPAPI through `SecureTokenStore`, while the backend stores refresh token hashes and request data.
 

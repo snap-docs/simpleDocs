@@ -44,7 +44,7 @@ The client reads:
 - `client/appsettings.Staging.json`
 - `client/appsettings.Production.json`
 
-The publish scripts can stamp the selected environment into the packaged `appsettings.json`. That lets a tester run `CodeExplainer.exe` directly without needing to understand environment variables.
+The publish scripts stamp the selected environment into the packaged `appsettings.json`. The compiled client also defaults to the hosted no-login Production service if that sidecar is missing, so accidentally copying only the self-contained EXE does not redirect a user to localhost.
 
 Local development can use:
 
