@@ -37,18 +37,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          cache: npm
-          cache-dependency-path: editor-extension/package-lock.json
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      - name: Install and test editor extension
+      - name: Test editor extension
         shell: pwsh
         run: |
-          npm --prefix editor-extension ci
-          if ($LASTEXITCODE -ne 0) { throw "Extension install failed." }
           npm --prefix editor-extension test
           if ($LASTEXITCODE -ne 0) { throw "Extension tests failed." }
 
