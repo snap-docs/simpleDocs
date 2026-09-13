@@ -38,6 +38,7 @@ namespace CodeExplainer.Engine.Strategies
             directory ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "CodeExplainer", "editor-bridge");
             if (!Directory.Exists(directory)) { RuntimeLog.Info("EditorBridge", "No active editor bridge directory."); return null; }
+            PruneDeadManifests(directory);
             using var budget = new CancellationTokenSource(TimeSpan.FromMilliseconds(1400));
             try
             {
@@ -106,6 +107,26 @@ namespace CodeExplainer.Engine.Strategies
 
         internal static bool OwnerMatches(uint? ownerProcessId, uint? foregroundProcessId) =>
             !ownerProcessId.HasValue || !foregroundProcessId.HasValue || ownerProcessId == foregroundProcessId;
+
+        private static void PruneDeadManifests(string directory)
+        {
+            try
+            {
+                foreach (string path in Directory.EnumerateFiles(directory, "simpleDocs-editor-*.json").Take(64))
+                {
+                    var match = PipePattern.Match(Path.GetFileNameWithoutExtension(path));
+                    if (match.Success
+                        && int.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.None,
+                            System.Globalization.CultureInfo.InvariantCulture, out int processId)
+                        && !IsProcessRunning(processId))
+                    {
+                        DeleteStaleManifest(path);
+                    }
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
 
         private static bool IsProcessRunning(int processId)
         {

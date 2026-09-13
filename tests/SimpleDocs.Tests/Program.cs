@@ -329,6 +329,7 @@ internal static class Program
             string staleManifest = System.IO.Path.Combine(directory, "simpleDocs-editor-2147483646-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json");
             System.IO.File.WriteAllText(staleManifest,
                 "{\"pipe\":\"simpleDocs-editor-2147483646-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"token\":\"" + new string('b', 64) + "\"}");
+            System.IO.File.SetLastWriteTimeUtc(staleManifest, DateTime.UtcNow.AddMinutes(-5));
             var snapshot = EditorBridgeClient.TryCaptureAsync(null, directory).GetAwaiter().GetResult();
             Check(snapshot?.SelectedText == "bridge_selection"
                 && snapshot.BackgroundContext == "before\nbridge_selection\nafter", checkName);
