@@ -3,10 +3,6 @@
 ## 1. Azure Backend Configuration
 
 - confirm Azure App Service environment variables contain real values for:
-  - `SUPABASE_URL`
-  - `SUPABASE_ANON_KEY`
-  - `SUPABASE_SERVICE_ROLE_KEY`
-  - `ACCESS_TOKEN_SECRET`
   - `AI_PROVIDER`
   - `GROQ_API_KEY`
   - `GROQ_API_KEY_FALLBACK` if used
@@ -21,14 +17,9 @@
 
 ## 2. Database Readiness
 
-- confirm migration SQL is applied in the hosted DB
-- confirm redeem codes exist in `redeem_codes`
-- run `npm run check:db`
-- confirm these tables are reachable:
-  - `participants`
-  - `redeem_codes`
-  - `refresh_tokens`
-  - `request_logs`
+- anonymous production does not require redeem codes, refresh tokens, participant rows, or request-log writes
+- before changing `AUTH_MODE` back to `protected`, apply the migrations and run `npm run check:db`
+- do not treat unavailable Supabase auth tables as a blocker for the current no-login build
 
 ## 3. Client Configuration
 
@@ -59,10 +50,9 @@
 ### Backend
 
 1. run `npm run check`
-2. run `npm run check:db`
-3. run `npm audit --omit=dev --audit-level=moderate`
-4. confirm no local secrets are committed
-5. confirm Azure deploy workflow still targets only `backend/`
+2. run `npm audit --omit=dev --audit-level=moderate`
+3. confirm no local secrets are committed
+4. confirm Azure deploy workflow still targets only `backend/`
 
 ## 5. Functional Verification
 
@@ -70,18 +60,12 @@
 - anonymous WebSocket connect works
 - one full explain request succeeds
 - overlay renders correctly
-- account-linked feedback and request logging are not expected in anonymous mode
+- account-linked feedback controls and request logging are not expected in anonymous mode
 - auto-start can be toggled from the tray menu
 
 ## 6. Data Verification
 
-After one successful hosted test request, confirm these DB effects:
-
-- one `participant` row exists or is reused
-- one `refresh_tokens` row exists
-- one `request_logs` row exists with expected values
-- the row includes the expected `task_type` and `status`
-- the row can later be updated with `feedback_reaction`
+After one successful hosted anonymous request, confirm no account, redeem code, or refresh token was required. Database row and feedback checks apply only to a future protected-auth deployment.
 
 ## 7. Operational Readiness
 
@@ -98,8 +82,7 @@ Release only if all are true:
 - hosted health works
 - hosted anonymous streaming works
 - build works
-- DB logging works
-- feedback logging works
+- anonymous requests work without database identity or feedback storage
 - support process is ready
 - no critical capture or overlay regressions remain
 - at least one clean-machine package validation has been completed

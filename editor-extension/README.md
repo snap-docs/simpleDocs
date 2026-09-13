@@ -6,7 +6,7 @@ It does not move the caret, copy whole files, scan a repository, or call an AI A
 
 ## Install and use
 
-1. Install the packaged `simpledocs-context-0.3.0.vsix` using **Extensions: Install from VSIX** in VS Code or Cursor.
+1. Install the packaged `simpledocs-context-0.4.0.vsix` using **Extensions: Install from VSIX** in VS Code or Cursor.
 2. Reload that editor window, then start the simpleDocs desktop executable.
 3. Highlight text in the editor and press the simpleDocs hotkey (normally Ctrl+Shift+Space).
 4. The desktop app asks this extension for the current selection and surrounding context before trying native selection capture.
@@ -26,8 +26,8 @@ F5 after adding a standard extension launch configuration.
 ## How matching works
 
 Each local extension host creates a randomly named Windows named pipe and a random authentication token.
-The discovery file is stored under `%LOCALAPPDATA%\CodeExplainer\editor-bridge` and removed on normal shutdown.
-The desktop app connects only to a pipe owned by the same Windows user. Stale or unavailable endpoints fall back to native capture. The desktop also publishes a separate authenticated
+The discovery file is published atomically under `%LOCALAPPDATA%\CodeExplainer\editor-bridge` and removed on normal shutdown.
+The desktop app connects only to a pipe owned by the same Windows user. It accepts older bridge manifests during rolling extension upgrades, prefers the bridge owned by the foreground editor window, briefly rescans while an extension host reloads, and removes a discovery file only when its embedded host process is no longer running. Stale or unavailable endpoints fall back to native capture. The desktop also publishes a separate authenticated
 command pipe under `%LOCALAPPDATA%\\CodeExplainer\\desktop-bridge`; the extension uses that pipe
 for **Explain Selection** and waits for an acknowledgement before reporting success.
 
@@ -57,11 +57,11 @@ Remote documents are supported through the local UI extension host; remote-only 
 ## Development
 
 Run `npm test` for context and real Windows named-pipe tests. There are no runtime npm dependencies.
-Package with `npx @vscode/vsce package --no-dependencies --out ../dist/simpledocs-context-0.3.0.vsix`.
+Package with `npx @vscode/vsce package --no-dependencies --out ../dist/simpledocs-context-0.4.0.vsix`.
 
 For an interactive integration test, build `tests/SimpleDocs.Tests` in Release and launch VS Code
 with this directory as `--extensionDevelopmentPath` and `test/integration.cjs` as
 `--extensionTestsPath`. Use separate `--user-data-dir` and `--extensions-dir` directories, and keep
 the test editor in the foreground. The test reads three changing selections from an unsaved Python
-document through the real desktop capture engine, checks neighboring context and selection preservation,
+document through the real extension-to-desktop bridge, checks neighboring context and selection preservation,
 and writes its result to `runlogs/editor-integration.json` in the repository.

@@ -98,7 +98,7 @@ Do not ask the tester to use PowerShell for normal usage.
 2. Press the configured hotkey.
 3. Wait for the floating overlay.
 4. Read the explanation.
-5. Optionally click thumbs up or thumbs down.
+5. Account-linked thumbs feedback is not shown in the current no-login build.
 
 ## If the tester has trouble
 

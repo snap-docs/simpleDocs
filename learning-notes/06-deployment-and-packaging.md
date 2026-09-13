@@ -146,9 +146,8 @@ Before a pilot build goes out, verify:
 - backend health responds
 - the app opens without a login prompt
 - anonymous WebSocket streaming works
-- one request appears in `request_logs`
-- feedback updates `feedback_reaction`
-- logout revokes refresh token
+- account-linked request logging and feedback controls remain disabled in anonymous mode
+- redeem, refresh-token, feedback, and database checks are run only before a protected-auth deployment
 - packaged client starts on a clean Windows machine
 
 The clean-machine check matters because a dev machine can hide missing runtime assumptions.

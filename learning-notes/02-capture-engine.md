@@ -166,6 +166,8 @@ Terminal-specific clipboard capture is separate because terminals can react diff
 
 The compatibility path never expands the selection or moves the caret to collect background text. Exact IDE context instead comes from the optional editor bridge or selection-anchored UIA ranges.
 
+Windows clipboard access is cooperative and can temporarily fail when another process has it open. Capture and restoration therefore use bounded retries. Restoration is attempted only while the clipboard sequence still matches the value written for this request, so a newer user or application copy is never overwritten.
+
 ## Focus Scope And Editor Bridge
 
 `CaptureScope` freezes the foreground window and focused UIA element for one capture. UIA provider work runs away from the WPF UI thread, only one capture is active, and stale results are discarded after focus changes or timeout.
@@ -173,6 +175,8 @@ The compatibility path never expands the selection or moves the caret to collect
 `ContextTextWindow` bounds context around the exact selection and rejects candidates that are only selection echoes.
 
 `EditorBridgeClient` talks to the VS Code/Cursor extension over a user-only local named pipe. The extension reads the active editor buffer, including unsaved text, but responds only for a focused window with one non-empty selection. The desktop client independently requires an exact selection match.
+
+Bridge discovery is designed for editor updates and multiple windows. A manifest is written to a temporary path and renamed atomically, protocol 3 records the owning editor-window PID, and the desktop prefers that owner while retaining protocol 1 and 2 compatibility. If an extension host disappears during an update, the desktop performs one bounded rescan. It deletes a manifest only after confirming that the process ID embedded in its authenticated pipe name is no longer alive. These rules prevent a half-written file, stale host, background editor, or rolling upgrade from turning into a permanent selection failure.
 
 ## Background Context Capture
 
