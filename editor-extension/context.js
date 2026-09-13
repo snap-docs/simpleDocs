@@ -8,13 +8,13 @@ function captureEditorContext(vscode, expectedSelection) {
   const document = editor.document;
   const selectedStart = document.offsetAt(editor.selection.start);
   const selectedEnd = document.offsetAt(editor.selection.end);
-  if (selectedEnd - selectedStart > 5000) return null;
+  if (selectedEnd - selectedStart > 12000) return null;
   const selected = document.getText(editor.selection);
   if (!selected.trim()) return null;
   if (expectedSelection != null && selected.replace(/\r\n/g, '\n').trim() !== expectedSelection.replace(/\r\n/g, '\n').trim()) return null;
 
   // Read a bounded range around the selection, including unsaved edits; never load other files.
-  const budget = 10000;
+  const budget = 12000;
   const before = Math.floor((budget - selected.length) / 2);
   const range = new vscode.Range(document.positionAt(Math.max(0, selectedStart - before)),
     document.positionAt(selectedEnd + budget - selected.length - before));

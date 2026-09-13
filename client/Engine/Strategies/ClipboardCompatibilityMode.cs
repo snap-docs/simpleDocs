@@ -212,6 +212,15 @@ namespace CodeExplainer.Engine.Strategies
                 || processName.Equals("devenv", StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsBrowserProcess(string processName)
+        {
+            return processName.Equals("chrome", StringComparison.OrdinalIgnoreCase)
+                || processName.Equals("msedge", StringComparison.OrdinalIgnoreCase)
+                || processName.Equals("firefox", StringComparison.OrdinalIgnoreCase)
+                || processName.Equals("brave", StringComparison.OrdinalIgnoreCase)
+                || processName.Equals("opera", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool LooksLikePlausibleEditorSelectionText(string text)
         {
             string normalized = text.Trim();

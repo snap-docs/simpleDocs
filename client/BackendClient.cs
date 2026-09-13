@@ -49,7 +49,7 @@ namespace CodeExplainer
             var streamStopwatch = Stopwatch.StartNew();
             int tokenChunks = 0;
             int tokenChars = 0;
-            string cleanSelectedText = TextSanitizer.SanitizePayloadText(selectedText, 5000);
+            string cleanSelectedText = TextSanitizer.SanitizePayloadText(selectedText, 12000);
             string cleanBackgroundContext = TextSanitizer.SanitizePayloadText(backgroundContext, 12000);
             string cleanWindowTitle = TextSanitizer.SanitizePayloadText(windowTitle, 400);
             string cleanProcessName = TextSanitizer.SanitizePayloadText(processName, 100);

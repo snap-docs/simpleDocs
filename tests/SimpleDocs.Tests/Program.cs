@@ -57,6 +57,27 @@ internal static class Program
             Check(EditorBridgeClient.OwnerMatches(null, 100u), "legacy bridge remains eligible during extension upgrade");
             Check(EditorBridgeClient.OwnerMatches(100u, 100u), "bridge owner matches foreground editor");
             Check(!EditorBridgeClient.OwnerMatches(101u, 100u), "background editor bridge is skipped");
+            Check(ClipboardCompatibilityMode.IsBrowserProcess("chrome")
+                && ClipboardCompatibilityMode.IsBrowserProcess("msedge")
+                && ClipboardCompatibilityMode.IsBrowserProcess("firefox")
+                && !ClipboardCompatibilityMode.IsBrowserProcess("notepad"),
+                "browser compatibility is limited to known browser processes");
+            string mathMl = "<math><semantics><mrow><mi>x</mi></mrow><annotation encoding=\"application/x-tex\">\\frac{x^2 + 1}{y}</annotation></semantics></math>";
+            Check(ClipboardManager.ExtractEquationFromHtml(mathMl) == "\\frac{x^2 + 1}{y}",
+                "MathML clipboard annotation preserves the selected TeX equation");
+            Check(ClipboardManager.ExtractEquationFromHtml("<math alttext=\"x &amp; y\"><mi>x</mi></math>") == "x & y",
+                "MathML clipboard alt text is decoded when TeX annotation is absent");
+            Check(ClipboardManager.ExtractEquationFromHtml("<math alttext=\"" + new string('x', 13000) + "\"></math>")?.Length == 12000,
+                "equation clipboard extraction stays inside the selected-text limit");
+            var browserWindow = new ActiveWindowInfo(IntPtr.Zero, 1, "msedge", "Calculus lesson - Browser", "Chrome_WidgetWin_1");
+            Check(CapturePipelines.LooksLikeBrowserChrome(browserWindow,
+                "Calculus lesson - Browser\nhttps://example.test/calculus\nSkip to content"),
+                "browser title, URL, and navigation text are rejected as chrome");
+            Check(!CapturePipelines.LooksLikeBrowserChrome(browserWindow, "\\int_0^1 x^2 \\, dx = \\frac{1}{3}"),
+                "a selected equation is not rejected as browser chrome");
+            Check(!CapturePipelines.LooksLikeBrowserChrome(
+                new ActiveWindowInfo(IntPtr.Zero, 1, "msedge", "", "Chrome_WidgetWin_1"), "x = y + 1"),
+                "browser selections remain valid when a page has no window title");
             var safeDefaults = new CodeExplainer.ClientConfig();
             Check(safeDefaults.EnvironmentName == "Production" && safeDefaults.ApiBaseUrl.StartsWith("https://")
                 && safeDefaults.WsBaseUrl.StartsWith("wss://") && !safeDefaults.AuthEnabled,

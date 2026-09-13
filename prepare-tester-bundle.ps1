@@ -60,6 +60,14 @@ if (Test-Path (Join-Path $projectRoot "chatgpt-tester-plan-prompt.md")) {
     Copy-Item -LiteralPath (Join-Path $projectRoot "chatgpt-tester-plan-prompt.md") -Destination (Join-Path $outputDir "docs\chatgpt-tester-plan-prompt.md") -Force
 }
 
+foreach ($manualName in @("simpleDocs-user-manual.pdf", "simpleDocs-user-manual.txt")) {
+    $manualPath = Join-Path $projectRoot "release-assets\$manualName"
+    if (-not (Test-Path $manualPath)) {
+        throw "Required user manual is missing: $manualPath"
+    }
+    Copy-Item -LiteralPath $manualPath -Destination (Join-Path $outputDir "docs\$manualName") -Force
+}
+
 $extensionPackage = Get-ChildItem -LiteralPath (Join-Path $projectRoot "dist") -Filter "simpledocs-context-*.vsix" -File -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTimeUtc -Descending |
     Select-Object -First 1

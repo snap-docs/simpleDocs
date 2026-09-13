@@ -25,7 +25,7 @@ namespace CodeExplainer.Engine.Strategies
 
         internal static bool IsValid(Snapshot? snapshot, string? selectedText) =>
             !string.IsNullOrWhiteSpace(snapshot?.SelectedText) && snapshot.BackgroundContext != null
-            && snapshot.SelectedText.Length <= 5000 && snapshot.BackgroundContext.Length <= 10000
+            && snapshot.SelectedText.Length <= 12000 && snapshot.BackgroundContext.Length <= 12000
             && (selectedText == null || Normalize(snapshot.SelectedText) == Normalize(selectedText))
             && snapshot.BackgroundContext.Contains(snapshot.SelectedText, StringComparison.Ordinal)
             && (selectedText == null || ContextTextWindow.AddsContext(snapshot.BackgroundContext, snapshot.SelectedText));

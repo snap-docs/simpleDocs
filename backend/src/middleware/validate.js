@@ -36,7 +36,7 @@ export async function validateExplainRequest(c, next) {
   }
 
   // Trim oversize inputs
-  const cleanSelected = sanitizeSelectedText(selected_text.trim(), 5000);
+  const cleanSelected = sanitizeSelectedText(selected_text.trim(), 12000);
   const cleanBackground = background_context
     ? sanitizeBackgroundText(background_context, 12000)
     : '';

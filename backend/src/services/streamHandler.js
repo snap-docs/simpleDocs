@@ -46,7 +46,7 @@ export async function handleStreamRequest(data, ws, authUser = null, { signal } 
     return;
   }
 
-  const cleanSelected = sanitizeSelectedText(selected_text.trim(), 5000);
+  const cleanSelected = sanitizeSelectedText(selected_text.trim(), 12000);
   const cleanBackground = sanitizeBackgroundText(background_context || '', 12000);
   const cleanWindowTitle = sanitizeMetadataText(window_title || '', 400);
   const cleanProcessName = sanitizeMetadataText(process_name || '', 100);

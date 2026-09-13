@@ -136,7 +136,7 @@ export function buildPrompt(caseType, selectedText, backgroundContext, windowTit
 
   // Sanitize background before sending it to the model to avoid wasting tokens on UI glyphs.
   const cleanedBackground = sanitizeBackgroundText(backgroundContext, 10000);
-  const cleanedSelected = sanitizeSelectedText(selectedText, 5000);
+  const cleanedSelected = sanitizeSelectedText(selectedText, 12000);
   const cleanedWindowTitle = sanitizeMetadataText(windowTitle, 400);
   const cleanedProcessName = sanitizeMetadataText(processName, 100);
 

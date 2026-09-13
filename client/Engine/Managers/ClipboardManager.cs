@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Net;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -9,6 +11,7 @@ namespace CodeExplainer.Engine.Managers
 {
     public class ClipboardManager
     {
+        internal const int SelectedTextLimit = 12000;
         private static readonly SemaphoreSlim CaptureLock = new(1, 1);
 
         public class ClipboardCaptureOutcome
@@ -53,7 +56,7 @@ namespace CodeExplainer.Engine.Managers
                                 restore = true;
                                 try
                                 {
-                                    captured = Clipboard.ContainsText() ? Clipboard.GetText() : null;
+                                    captured = ExtractClipboardText(Clipboard.GetDataObject(), SelectedTextLimit);
                                     if (!string.IsNullOrWhiteSpace(captured)) break;
                                 }
                                 catch (ExternalException) { }
@@ -101,6 +104,48 @@ namespace CodeExplainer.Engine.Managers
                 }).Task.Unwrap();
             }
             finally { CaptureLock.Release(); }
+        }
+
+        internal static string? ExtractClipboardText(IDataObject? data, int maxChars = SelectedTextLimit)
+        {
+            if (data == null || maxChars <= 0) return null;
+
+            foreach (string format in new[] { DataFormats.UnicodeText, DataFormats.Text })
+            {
+                if (data.GetDataPresent(format) && data.GetData(format) is string text && !string.IsNullOrWhiteSpace(text))
+                    return Bound(text, maxChars);
+            }
+
+            return data.GetDataPresent(DataFormats.Html) && data.GetData(DataFormats.Html) is string html
+                ? ExtractEquationFromHtml(html, maxChars)
+                : null;
+        }
+
+        internal static string? ExtractEquationFromHtml(string? html, int maxChars = SelectedTextLimit)
+        {
+            if (string.IsNullOrWhiteSpace(html) || maxChars <= 0) return null;
+
+            Match annotation = Regex.Match(html,
+                "<annotation\\b[^>]*encoding\\s*=\\s*['\"]application/(?:x-)?tex['\"][^>]*>(.*?)</annotation>",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (annotation.Success)
+                return Bound(WebUtility.HtmlDecode(StripTags(annotation.Groups[1].Value)), maxChars);
+
+            Match altText = Regex.Match(html, "<math\\b[^>]*\\balttext\\s*=\\s*(['\"])(.*?)\\1",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            if (altText.Success)
+                return Bound(WebUtility.HtmlDecode(altText.Groups[2].Value), maxChars);
+
+            return null;
+        }
+
+        private static string StripTags(string value) => Regex.Replace(value, "<[^>]+>", string.Empty);
+
+        private static string? Bound(string value, int maxChars)
+        {
+            string normalized = value.Replace("\r\n", "\n").Replace('\r', '\n').Trim();
+            if (normalized.Length == 0) return null;
+            return normalized.Length <= maxChars ? normalized : normalized[..maxChars];
         }
 
         private static async Task<(DataObject? Snapshot, string? Text)> MaterializeClipboardWithRetryAsync()

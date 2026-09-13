@@ -22,7 +22,7 @@ namespace CodeExplainer
         [JsonPropertyName("editor")] public string? Editor { get; set; }
 
         internal bool IsValid => Type == "explain"
-            && !string.IsNullOrWhiteSpace(SelectedText) && SelectedText.Length <= 5000
+            && !string.IsNullOrWhiteSpace(SelectedText) && SelectedText.Length <= 12000
             && BackgroundContext != null && BackgroundContext.Length <= 10000
             && BackgroundContext.Contains(SelectedText, StringComparison.Ordinal)
             && DocumentName is { Length: <= 400 } && Editor is "code" or "cursor";

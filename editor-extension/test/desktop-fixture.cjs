@@ -24,7 +24,7 @@ async function main() {
     });
   }
   assert.equal(await raw({ ...snapshot('bad-token'), type: 'explain', token: 'wrong' }), 'invalid');
-  assert.equal(await raw({ ...snapshot('x'.repeat(5001)), type: 'explain', token: manifest.token }), 'invalid');
+  assert.equal(await raw({ ...snapshot('x'.repeat(12001)), type: 'explain', token: manifest.token }), 'invalid');
   assert.equal(await raw({ ...snapshot('not-in-context'), background_context: 'different', type: 'explain', token: manifest.token }), 'invalid');
   for (const text of ['first', 'second', 'first']) assert.equal(await sendToDesktop(snapshot(text), directory), true);
   await assert.rejects(sendToDesktop(snapshot('__busy__'), directory), /finishing/);

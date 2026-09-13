@@ -21,7 +21,7 @@ function fixture(source, start, length) {
 test('bounded context near end of a large unsaved buffer includes selection and neighbors', () => {
   const source = 'x'.repeat(100000) + 'before\nSELECTED\nafter' + 'y'.repeat(10000);
   const result = captureEditorContext(fixture(source, 100007, 8), 'SELECTED');
-  assert.equal(result.background_context.length, 10000);
+  assert.equal(result.background_context.length, 12000);
   assert.ok(result.background_context.includes('before\nSELECTED\nafter'));
   assert.equal(result.is_dirty, true);
   assert.equal(result.version, 7);
@@ -49,7 +49,13 @@ test('primary capture works without accessibility selection and reflects repeate
   assert.equal(captureEditorContext(api, null), null);
 });
 test('oversized selection does not read an unbounded document', () => {
-  const api = fixture('x'.repeat(6000), 0, 6000);
+  const api = fixture('x'.repeat(13000), 0, 13000);
   api.window.activeTextEditor.document.getText = () => { throw new Error('unexpected read'); };
   assert.equal(captureEditorContext(api, 'x'), null);
+});
+test('large selections up to the shared limit are captured', () => {
+  const source = 'x'.repeat(11000);
+  const result = captureEditorContext(fixture(source, 0, source.length), source);
+  assert.equal(result.selected_text.length, 11000);
+  assert.equal(result.background_context.length, 11000);
 });

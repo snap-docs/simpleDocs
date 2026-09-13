@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using CodeExplainer.Engine.Models;
+using CodeExplainer.Engine.Managers;
 
 namespace CodeExplainer.Engine.Strategies
 {
@@ -49,7 +50,7 @@ namespace CodeExplainer.Engine.Strategies
                     RuntimeLog.Warn("CapturePipeline", "Skipping UIA/MSAA selected-text grab for Google Docs; relying purely on clipboard compatibility.");
                     goto skipMsaaFirstUiaSelection;
                 }
-                if (!preferMsaaFirst && UiAutomationCapture.TryGetSelectedText(5000, out string uiaSelected))
+                if (!preferMsaaFirst && UiAutomationCapture.TryGetSelectedText(ClipboardManager.SelectedTextLimit, out string uiaSelected))
                 {
                     if (IsRejectedIdeSelectedSource(window, uiaSelected))
                     {
@@ -57,7 +58,7 @@ namespace CodeExplainer.Engine.Strategies
                     }
                     else
                     {
-                        string cleaned = CleanKnownUiNoise(window, uiaSelected, 5000);
+                        string cleaned = CleanKnownUiNoise(window, uiaSelected, ClipboardManager.SelectedTextLimit);
                         if (LooksLikeSelectedUiNoise(window, cleaned))
                         {
                             RuntimeLog.Warn("CapturePipeline", $"Rejected noisy UIA selected text for {window.ProcessName}.");
@@ -75,7 +76,7 @@ namespace CodeExplainer.Engine.Strategies
             skipUiaSelection:
 
                 bool hasMsaaSelectionSignal = MsaaCapture.HasSelection(window.Hwnd);
-                if (MsaaCapture.TryGetExplicitSelectionText(window.Hwnd, 5000, out string msaaSelected))
+                if (MsaaCapture.TryGetExplicitSelectionText(window.Hwnd, ClipboardManager.SelectedTextLimit, out string msaaSelected))
                 {
                     if (!hasMsaaSelectionSignal)
                     {
@@ -87,7 +88,7 @@ namespace CodeExplainer.Engine.Strategies
                     }
                     else
                     {
-                        string cleaned = CleanKnownUiNoise(window, msaaSelected, 5000);
+                        string cleaned = CleanKnownUiNoise(window, msaaSelected, ClipboardManager.SelectedTextLimit);
                         if (LooksLikeSelectedUiNoise(window, cleaned))
                         {
                             RuntimeLog.Warn("CapturePipeline", $"Rejected noisy MSAA selected text for {window.ProcessName}.");
@@ -105,7 +106,7 @@ namespace CodeExplainer.Engine.Strategies
                 }
             skipMsaaSelection:
 
-                if (allowMsaaFocusedFallback && MsaaCapture.TryGetFocusedText(window.Hwnd, 5000, out string msaaFocused))
+                if (allowMsaaFocusedFallback && MsaaCapture.TryGetFocusedText(window.Hwnd, ClipboardManager.SelectedTextLimit, out string msaaFocused))
                 {
                     if (IsRejectedIdeSelectedSource(window, msaaFocused))
                     {
@@ -113,7 +114,7 @@ namespace CodeExplainer.Engine.Strategies
                     }
                     else
                     {
-                        string cleaned = CleanKnownUiNoise(window, msaaFocused, 5000);
+                        string cleaned = CleanKnownUiNoise(window, msaaFocused, ClipboardManager.SelectedTextLimit);
                         if (LooksLikeSelectedUiNoise(window, cleaned))
                         {
                             RuntimeLog.Warn("CapturePipeline", $"Rejected noisy MSAA focused text for {window.ProcessName}.");
@@ -131,7 +132,7 @@ namespace CodeExplainer.Engine.Strategies
                     }
                 }
 
-                if (preferMsaaFirst && UiAutomationCapture.TryGetSelectedText(5000, out uiaSelected))
+                if (preferMsaaFirst && UiAutomationCapture.TryGetSelectedText(ClipboardManager.SelectedTextLimit, out uiaSelected))
                 {
                     if (IsRejectedIdeSelectedSource(window, uiaSelected))
                     {
@@ -139,7 +140,7 @@ namespace CodeExplainer.Engine.Strategies
                     }
                     else
                     {
-                        string cleaned = CleanKnownUiNoise(window, uiaSelected, 5000);
+                        string cleaned = CleanKnownUiNoise(window, uiaSelected, ClipboardManager.SelectedTextLimit);
                         if (LooksLikeSelectedUiNoise(window, cleaned))
                         {
                             RuntimeLog.Warn("CapturePipeline", $"Rejected noisy UIA selected text for {window.ProcessName}.");
@@ -171,6 +172,7 @@ namespace CodeExplainer.Engine.Strategies
             bool allowCompatWithoutSignal = compatibilityMode.Enabled
                 && (
                     ClipboardCompatibilityMode.IsIdeProcess(window.ProcessName) 
+                    || ClipboardCompatibilityMode.IsBrowserProcess(window.ProcessName)
                     || isGoogleDocs
                 );
 
@@ -197,7 +199,7 @@ namespace CodeExplainer.Engine.Strategies
                 }
                 else
                 {
-                    string cleanedCompatibility = CleanKnownUiNoise(window, compatibilityText!, 5000);
+                    string cleanedCompatibility = CleanKnownUiNoise(window, compatibilityText!, ClipboardManager.SelectedTextLimit);
                     if (LooksLikeSelectedUiNoise(window, cleanedCompatibility))
                     {
                         RuntimeLog.Warn("CapturePipeline", $"Rejected noisy compatibility-mode selected text for {window.ProcessName}.");
@@ -257,7 +259,7 @@ namespace CodeExplainer.Engine.Strategies
             ActiveWindowInfo window,
             ClipboardCompatibilityMode compatibilityMode)
         {
-            if (UiAutomationCapture.TryGetSelectedText(5000, out string uiaSelected))
+            if (UiAutomationCapture.TryGetSelectedText(ClipboardManager.SelectedTextLimit, out string uiaSelected))
             {
                 if (IsRejectedIdeSelectedSource(window, uiaSelected))
                 {
@@ -265,7 +267,7 @@ namespace CodeExplainer.Engine.Strategies
                 }
                 else
                 {
-                    string cleaned = CleanKnownUiNoise(window, uiaSelected, 5000);
+                    string cleaned = CleanKnownUiNoise(window, uiaSelected, ClipboardManager.SelectedTextLimit);
                     if (!string.IsNullOrWhiteSpace(cleaned) && !LooksLikeSelectedUiNoise(window, cleaned))
                     {
                         return new SelectedCaptureOutcome
@@ -278,7 +280,7 @@ namespace CodeExplainer.Engine.Strategies
                 }
             }
 
-            if (MsaaCapture.TryGetExplicitSelectionText(window.Hwnd, 5000, out string msaaSelected))
+            if (MsaaCapture.TryGetExplicitSelectionText(window.Hwnd, ClipboardManager.SelectedTextLimit, out string msaaSelected))
             {
                 if (IsRejectedIdeSelectedSource(window, msaaSelected))
                 {
@@ -286,7 +288,7 @@ namespace CodeExplainer.Engine.Strategies
                 }
                 else
                 {
-                    string cleaned = CleanKnownUiNoise(window, msaaSelected, 5000);
+                    string cleaned = CleanKnownUiNoise(window, msaaSelected, ClipboardManager.SelectedTextLimit);
                     if (!string.IsNullOrWhiteSpace(cleaned) && !LooksLikeSelectedUiNoise(window, cleaned))
                     {
                         return new SelectedCaptureOutcome
@@ -308,7 +310,7 @@ namespace CodeExplainer.Engine.Strategies
                 }
                 else
                 {
-                    string cleaned = CleanKnownUiNoise(window, compatibilityText, 5000);
+                    string cleaned = CleanKnownUiNoise(window, compatibilityText, ClipboardManager.SelectedTextLimit);
                     if (!string.IsNullOrWhiteSpace(cleaned) && !LooksLikeSelectedUiNoise(window, cleaned))
                     {
                         return new SelectedCaptureOutcome
@@ -589,7 +591,8 @@ namespace CodeExplainer.Engine.Strategies
             }
 
             string normalized = text.Trim();
-            if (normalized.StartsWith(window.Title, System.StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(window.Title)
+                && normalized.StartsWith(window.Title, System.StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -599,7 +602,26 @@ namespace CodeExplainer.Engine.Strategies
                 return true;
             }
 
-            return ContainsKnownUiNoise(normalized) || LooksLikeIdeChromeLabelsOnly(normalized);
+            return LooksLikeBrowserChrome(window, normalized)
+                || ContainsKnownUiNoise(normalized)
+                || LooksLikeIdeChromeLabelsOnly(normalized);
+        }
+
+        internal static bool LooksLikeBrowserChrome(ActiveWindowInfo window, string text)
+        {
+            if (!ClipboardCompatibilityMode.IsBrowserProcess(window.ProcessName) || string.IsNullOrWhiteSpace(text))
+                return false;
+
+            string normalized = text.Trim();
+            string lower = normalized.ToLowerInvariant();
+            int signals = 0;
+            if (!string.IsNullOrWhiteSpace(window.Title)
+                && normalized.Contains(window.Title, System.StringComparison.OrdinalIgnoreCase)) signals++;
+            if (lower.Contains("http://") || lower.Contains("https://")) signals++;
+            if (lower.Contains("skip to content") || lower.Contains("address and search bar")
+                || lower.Contains("new tab") || lower.Contains("reload this page")) signals++;
+
+            return signals >= 2;
         }
 
         private static bool LooksLikeEditorBackgroundNoise(string text)

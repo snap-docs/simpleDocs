@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildPrompt } from '../src/services/promptEngine.js';
+import { sanitizeSelectedText } from '../src/utils/textSanitizer.js';
 
 test('IDE code prompts request concise but concrete explanations', () => {
   const { systemPrompt, userPrompt } = buildPrompt(
@@ -33,4 +34,12 @@ test('richer prompts preserve the error no-solution boundary', () => {
   assert.match(systemPrompt, /NEVER provide the corrected code/);
   assert.match(systemPrompt, /one small directional hint/);
   assert.match(systemPrompt, /Return 4 short lines in most cases/);
+});
+
+test('large equations remain intact up to the shared selected-text limit', () => {
+  const equation = `\\int_0^1 ${'x+'.repeat(5500)} 0\\,dx`;
+  assert.equal(sanitizeSelectedText(equation).length, equation.length);
+  assert.equal(sanitizeSelectedText('x'.repeat(13000)).length, 12000);
+  assert.match(buildPrompt(4, equation, '', 'Calculus', 'msedge', 'browser_chromium').userPrompt,
+    new RegExp(`${'x\\+'.repeat(20)}`));
 });

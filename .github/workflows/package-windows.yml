@@ -6,7 +6,7 @@ on:
       version:
         description: Release version shown by the desktop client
         required: false
-        default: 1.4.2-pilot
+        default: 1.4.3-pilot
   push:
     branches:
       - main
@@ -17,6 +17,7 @@ on:
       - publish-client.ps1
       - package-editor-extension.ps1
       - prepare-tester-bundle.ps1
+      - release-assets/**
       - final-tester-package-guide.md
       - chatgpt-tester-plan-prompt.md
       - .github/workflows/package-windows.yml
@@ -29,7 +30,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      RELEASE_VERSION: ${{ inputs.version || '1.4.2-pilot' }}
+      RELEASE_VERSION: ${{ inputs.version || '1.4.3-pilot' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +78,17 @@ jobs:
           $zipPath = Resolve-Path "dist/simpleDocs-$env:RELEASE_VERSION-win-x64.zip"
           $vsixPath = Get-ChildItem "dist/simpledocs-context-*.vsix" -File | Select-Object -First 1
           if (-not $vsixPath) { throw "VSIX package is missing." }
+
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $entryNames = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\\', '/') })
+            foreach ($requiredManual in @("docs/simpleDocs-user-manual.pdf", "docs/simpleDocs-user-manual.txt")) {
+              if ($requiredManual -notin $entryNames) { throw "Release archive is missing $requiredManual." }
+            }
+          } finally {
+            $archive.Dispose()
+          }
 
           $config = Get-Content $configPath -Raw | ConvertFrom-Json
           if ($config.Environment -ne "Production") { throw "Package is not configured for Production." }

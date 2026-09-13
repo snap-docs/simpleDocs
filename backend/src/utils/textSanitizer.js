@@ -22,7 +22,7 @@ function sanitizeText(input, maxChars = 10000) {
   return cleaned.substring(0, maxChars);
 }
 
-export function sanitizeSelectedText(input, maxChars = 5000) {
+export function sanitizeSelectedText(input, maxChars = 12000) {
   return sanitizeText(input, maxChars);
 }
 
