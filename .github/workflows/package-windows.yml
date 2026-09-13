@@ -1,0 +1,115 @@
+name: Build Windows tester package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version shown by the desktop client
+        required: false
+        default: 1.4.2-pilot
+  push:
+    branches:
+      - main
+    paths:
+      - client/**
+      - editor-extension/**
+      - tests/**
+      - publish-client.ps1
+      - package-editor-extension.ps1
+      - prepare-tester-bundle.ps1
+      - final-tester-package-guide.md
+      - chatgpt-tester-plan-prompt.md
+      - .github/workflows/package-windows.yml
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      RELEASE_VERSION: ${{ inputs.version || '1.4.2-pilot' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: editor-extension/package-lock.json
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install and test editor extension
+        shell: pwsh
+        run: |
+          npm --prefix editor-extension ci
+          if ($LASTEXITCODE -ne 0) { throw "Extension install failed." }
+          npm --prefix editor-extension test
+          if ($LASTEXITCODE -ne 0) { throw "Extension tests failed." }
+
+      - name: Build and test desktop client
+        shell: pwsh
+        run: |
+          dotnet build client/CodeExplainer.csproj -c Release -nologo
+          if ($LASTEXITCODE -ne 0) { throw "Desktop build failed." }
+          dotnet run --project tests/SimpleDocs.Tests/SimpleDocs.Tests.csproj -c Release -- --bridge --desktop-bridge --transport --overlay
+          if ($LASTEXITCODE -ne 0) { throw "Desktop tests failed." }
+
+      - name: Publish no-login Windows client
+        shell: pwsh
+        run: |
+          $productVersion = "$env:RELEASE_VERSION+$env:GITHUB_SHA"
+          ./publish-client.ps1 -Version $productVersion -EnvironmentName Production -SelfContained
+
+      - name: Package editor extension and tester bundle
+        shell: pwsh
+        run: |
+          ./package-editor-extension.ps1
+          ./prepare-tester-bundle.ps1 -EnvironmentName Production
+          $zipPath = "dist/simpleDocs-$env:RELEASE_VERSION-win-x64.zip"
+          Compress-Archive -Path "dist/tester-bundle/*" -DestinationPath $zipPath -CompressionLevel Optimal -Force
+
+      - name: Validate packaged release
+        shell: pwsh
+        run: |
+          $exePath = Resolve-Path "dist/client/CodeExplainer.exe"
+          $configPath = Resolve-Path "dist/client/appsettings.json"
+          $zipPath = Resolve-Path "dist/simpleDocs-$env:RELEASE_VERSION-win-x64.zip"
+          $vsixPath = Get-ChildItem "dist/simpledocs-context-*.vsix" -File | Select-Object -First 1
+          if (-not $vsixPath) { throw "VSIX package is missing." }
+
+          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          if ($config.Environment -ne "Production") { throw "Package is not configured for Production." }
+          if ($config.Auth.Enabled -ne $false) { throw "Package unexpectedly requires sign-in." }
+          if ($config.Backend.ApiBaseUrl -notmatch '^https://') { throw "Package API URL is not HTTPS." }
+          if ($config.Backend.WsBaseUrl -notmatch '^wss://') { throw "Package WebSocket URL is not WSS." }
+
+          $productVersion = (Get-Item $exePath).VersionInfo.ProductVersion
+          if ($productVersion -notlike "$env:RELEASE_VERSION+$env:GITHUB_SHA*") {
+            throw "EXE version does not contain the release version and source revision: $productVersion"
+          }
+
+          $checksums = @($exePath, $vsixPath.FullName, $zipPath) | ForEach-Object {
+            $hash = Get-FileHash -LiteralPath $_ -Algorithm SHA256
+            "$($hash.Hash)  $([IO.Path]::GetFileName($hash.Path))"
+          }
+          $checksums | Set-Content "dist/SHA256SUMS.txt" -Encoding ASCII
+          Get-Content "dist/SHA256SUMS.txt"
+
+      - name: Upload Windows release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: simpleDocs-windows-${{ github.run_number }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            dist/client/CodeExplainer.exe
+            dist/client/appsettings.json
+            dist/simpledocs-context-*.vsix
+            dist/simpleDocs-*-win-x64.zip
+            dist/SHA256SUMS.txt
