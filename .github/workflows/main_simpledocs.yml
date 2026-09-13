@@ -81,6 +81,24 @@ jobs:
           test -n "$resource_group"
           az webapp config appsettings set --resource-group "$resource_group" --name simpleDocs --settings APP_ENV=production AI_PROVIDER=groq AUTH_MODE=anonymous SKIP_AUTH=false GROQ_MODEL=openai/gpt-oss-120b
 
+      - name: Sync encrypted provider keys when configured
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_API_KEY_FALLBACK: ${{ secrets.GROQ_API_KEY_FALLBACK }}
+        run: |
+          resource_group=$(az webapp list --query "[?name=='simpleDocs'].resourceGroup | [0]" -o tsv)
+          test -n "$resource_group"
+
+          if [ -n "$GROQ_API_KEY" ]; then
+            az webapp config appsettings set --resource-group "$resource_group" --name simpleDocs --settings "GROQ_API_KEY=$GROQ_API_KEY" --output none
+          else
+            echo "GROQ_API_KEY Actions secret is not configured; preserving the existing Azure setting."
+          fi
+
+          if [ -n "$GROQ_API_KEY_FALLBACK" ]; then
+            az webapp config appsettings set --resource-group "$resource_group" --name simpleDocs --settings "GROQ_API_KEY_FALLBACK=$GROQ_API_KEY_FALLBACK" --output none
+          fi
+
       - name: Ensure App Service is running
         run: |
           resource_group=$(az webapp list --query "[?name=='simpleDocs'].resourceGroup | [0]" -o tsv)
@@ -91,7 +109,7 @@ jobs:
         run: |
           resource_group=$(az webapp list --query "[?name=='simpleDocs'].resourceGroup | [0]" -o tsv)
           settings=$(az webapp config appsettings list --resource-group "$resource_group" --name simpleDocs --query "[].name" -o tsv)
-          for required in APP_ENV AI_PROVIDER AUTH_MODE SKIP_AUTH GROQ_MODEL; do
+          for required in APP_ENV AI_PROVIDER AUTH_MODE SKIP_AUTH GROQ_MODEL GROQ_API_KEY; do
             grep -qx "$required" <<< "$settings" || { echo "Missing Azure app setting: $required"; exit 1; }
           done
 
