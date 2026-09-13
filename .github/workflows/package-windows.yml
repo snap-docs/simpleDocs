@@ -59,8 +59,7 @@ jobs:
       - name: Publish no-login Windows client
         shell: pwsh
         run: |
-          $productVersion = "$env:RELEASE_VERSION+$env:GITHUB_SHA"
-          ./publish-client.ps1 -Version $productVersion -EnvironmentName Production -SelfContained
+          ./publish-client.ps1 -Version $env:RELEASE_VERSION -EnvironmentName Production -SelfContained
 
       - name: Package editor extension and tester bundle
         shell: pwsh
@@ -86,7 +85,7 @@ jobs:
           if ($config.Backend.WsBaseUrl -notmatch '^wss://') { throw "Package WebSocket URL is not WSS." }
 
           $productVersion = (Get-Item $exePath).VersionInfo.ProductVersion
-          if ($productVersion -notlike "$env:RELEASE_VERSION+$env:GITHUB_SHA*") {
+          if ($productVersion -ne "$env:RELEASE_VERSION+$env:GITHUB_SHA") {
             throw "EXE version does not contain the release version and source revision: $productVersion"
           }
 
