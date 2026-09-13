@@ -17,6 +17,10 @@ RULES:
 - Go one level deeper than a basic paraphrase
 - Do not just restate syntax in simpler words
 - Prefer explaining role, behavior, and effect
+- Start with one clear purpose line that tells the user why this code exists in the local flow
+- Include one concrete mechanism detail, such as data movement, state change, control flow, return value, or side effect
+- Preserve important identifier names so the explanation stays connected to the code the user can see
+- End with the most useful practical effect or concept, not a generic summary
 - If the selected text is one line from a larger block, explain what that line is doing and why it matters in the local flow
 - If background shows nearby declarations, function body, or class members, use that to explain the selected text more accurately
 - If the selected text contains multiple important built-ins, methods, properties, entries, or chained calls, explain the important ones one by one on separate short lines
@@ -82,8 +86,8 @@ RULES:
 const WIDGET_OUTPUT_RULES = `
 WIDGET OUTPUT RULES (STRICT):
 - This response is shown in a very small overlay widget.
-- Return 3 short sentences in most cases. You may use 4 short sentences when needed.
-- Return 3 short lines in most cases. You may use 4 short lines when needed.
+- Return 4 short sentences in most cases. You may use 5 short sentences when the selected code has several important parts.
+- Return 4 short lines in most cases. You may use 5 short lines when needed for a genuinely complex selection.
 - Use 2 short lines only when the selected text is extremely small and extra detail would be filler.
 - Keep each sentence short, clear, and readable.
 - Do not use bullet points.
@@ -109,6 +113,8 @@ WIDGET OUTPUT RULES (STRICT):
 - If the selected text is a normal word or short phrase from prose or docs, explain its meaning directly.
 - For code, prefer explaining purpose and effect over obvious syntax narration.
 - For code, make the explanation useful to someone who already knows basic syntax.
+- For code, include at least one concrete detail about inputs, outputs, state, control flow, or side effects when visible.
+- Prefer precise phrases such as "returns the filtered items" over vague phrases such as "handles the data".
 - Do not invent an error, warning, or code problem unless the selected text itself clearly shows one.
 - Do not treat a plain term as broken code just because the surrounding page mentions code, Git, deployment, or tooling.
 - Output plain sentence flow only.`;
@@ -187,6 +193,7 @@ function buildEnvironmentRules(caseType, environmentType) {
 - The selection comes from an IDE editor.
 - Assume the user can already read basic syntax.
 - Explain the code's role in the surrounding flow, what state or behavior it affects, and why this line or block matters.
+- Use a purpose-first progression: purpose, mechanism, local effect, then the relevant concept or caution.
 - If the selection contains several notable identifiers or built-ins, break them into separate labeled lines instead of compressing them into one vague sentence.
 - If a framework annotation or built-in is visible, mention it explicitly instead of only describing the surrounding method in general terms.`;
   }
