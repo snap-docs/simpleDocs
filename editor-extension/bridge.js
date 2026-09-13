@@ -3,11 +3,12 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-async function startBridge(directory, capture) {
+async function startBridge(directory, capture, options = {}) {
   const suffix = crypto.randomBytes(16).toString('hex');
   const pipe = `simpleDocs-editor-${process.pid}-${suffix}`;
   const token = crypto.randomBytes(32).toString('hex');
   const manifest = path.join(directory, `${pipe}.json`);
+  const temporaryManifest = manifest + '.tmp';
   const sockets = new Set();
   const server = net.createServer(socket => {
     sockets.add(socket);
@@ -37,13 +38,30 @@ async function startBridge(directory, capture) {
     server.listen(`\\\\.\\pipe\\${pipe}`, resolve);
   });
   server.on('error', () => {});
-  try { await fs.writeFile(manifest, JSON.stringify({ pipe, token, protocol: 2 }), { mode: 0o600 }); }
-  catch (error) { server.close(); throw error; }
+  const protocol = Number.isInteger(options.protocol) ? options.protocol : 3;
+  const ownerPid = Number.isInteger(options.ownerPid) && options.ownerPid > 0 ? options.ownerPid : undefined;
+  const manifestData = protocol <= 1 ? { pipe, token } : {
+    pipe,
+    token,
+    protocol,
+    owner_pid: ownerPid,
+    created_at_utc: new Date().toISOString()
+  };
+  try {
+    await fs.writeFile(temporaryManifest, JSON.stringify(manifestData), { mode: 0o600 });
+    await fs.rename(temporaryManifest, manifest);
+  }
+  catch (error) {
+    await fs.rm(temporaryManifest, { force: true }).catch(() => {});
+    server.close();
+    throw error;
+  }
   return {
     async dispose() {
       for (const socket of sockets) socket.destroy();
       await new Promise(resolve => server.close(resolve));
       await fs.rm(manifest, { force: true });
+      await fs.rm(temporaryManifest, { force: true });
     }
   };
 }

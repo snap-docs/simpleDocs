@@ -9,7 +9,9 @@ const exec = promisify(execFile);
 exports.run = async () => {
   const report = path.resolve(__dirname, '../../runlogs/editor-integration.json');
   fs.writeFileSync(report, JSON.stringify({ status: 'running' }));
-  await vscode.extensions.getExtension('simpledocs.simpledocs-context').activate();
+  const extension = vscode.extensions.getExtension('simpledocs.simpledocs-context');
+  assert.ok(extension, 'simpleDocs development extension must be loaded');
+  await extension.activate();
   const document = await vscode.workspace.openTextDocument({ language: 'python',
     content: '# NEIGHBOR_CONTEXT\nstudent1.check_result()\nprint("Student Failed")\n' });
   const editor = await vscode.window.showTextDocument(document);
@@ -24,7 +26,7 @@ exports.run = async () => {
       assert.ok(vscode.window.state.focused, 'test editor must be in foreground');
       await new Promise(resolve => setTimeout(resolve, 250));
       const original = editor.selection;
-      const { stdout } = await exec(runner, ['--live-editor', document.lineAt(line).text, process.env.VSCODE_PID],
+      const { stdout } = await exec(runner, ['--live-editor', document.lineAt(line).text],
         { windowsHide: true, timeout: 15000 });
       console.log(stdout);
       fs.appendFileSync(path.resolve(__dirname, '../../runlogs/editor-integration.log'), stdout);

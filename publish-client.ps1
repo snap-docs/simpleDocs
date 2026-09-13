@@ -3,7 +3,7 @@ param(
     [string]$Runtime = "win-x64",
     [string]$EnvironmentName = "Production",
     [string]$OutputRoot = ".\dist\client",
-    [string]$Version = "1.4.1-pilot",
+    [string]$Version = "1.4.2-pilot",
     [switch]$SelfContained,
     [switch]$FrameworkDependent
 )

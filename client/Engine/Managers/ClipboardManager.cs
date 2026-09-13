@@ -79,7 +79,7 @@ namespace CodeExplainer.Engine.Managers
                         // Do not overwrite a newer clipboard update that happened after our read.
                         if (restore)
                         {
-                            for (int attempt = 0; attempt < 4; attempt++)
+                            for (int attempt = 0; attempt < 8; attempt++)
                             {
                                 if (GetClipboardSequenceNumber() != capturedSequence) break;
                                 try
@@ -90,7 +90,10 @@ namespace CodeExplainer.Engine.Managers
                                 }
                                 catch (ExternalException)
                                 {
-                                    await Task.Delay(40);
+                                    if (attempt == 7)
+                                        RuntimeLog.Warn("Clipboard", "Original clipboard could not be restored after bounded retries.");
+                                    else
+                                        await Task.Delay(50);
                                 }
                             }
                         }

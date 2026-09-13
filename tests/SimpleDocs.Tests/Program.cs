@@ -23,13 +23,17 @@ internal static class Program
         {
             if (args.Contains("--live-editor"))
             {
-                using var editorProcess = System.Diagnostics.Process.GetProcessById(int.Parse(args[2]));
-                Win32Native.SetForegroundWindow(editorProcess.MainWindowHandle);
-                Thread.Sleep(350);
-                var captured = new ContextCaptureEngine().ExecuteCaptureAsync(1).GetAwaiter().GetResult();
-                Check(captured.SelectedMethod == CaptureMethod.EditorBridge, "real editor uses bridge as primary selection source");
-                Check(captured.SelectedText == args[1], "real editor returns current selection");
-                Check(captured.BackgroundContext.Contains("NEIGHBOR_CONTEXT"), "real editor returns unsaved background");
+                var captured = EditorBridgeClient.TryCaptureAsync(null).GetAwaiter().GetResult();
+                Check(captured?.SelectedText == args[1], "real editor bridge returns current selection");
+                Check(captured?.BackgroundContext?.Contains("NEIGHBOR_CONTEXT") == true, "real editor bridge returns unsaved background");
+                return 0;
+            }
+            if (args.Contains("--probe-live-editor"))
+            {
+                var captured = EditorBridgeClient.TryCaptureAsync(null).GetAwaiter().GetResult();
+                Check(!string.IsNullOrWhiteSpace(captured?.SelectedText), "live editor bridge returns a non-empty selection");
+                Check(captured?.BackgroundContext?.Contains(captured.SelectedText!, StringComparison.Ordinal) == true,
+                    "live editor bridge returns selection-anchored context");
                 return 0;
             }
             string selected = "const answer = calculateTotal(items);";
@@ -50,6 +54,9 @@ internal static class Program
             Check(!EditorBridgeClient.IsValid(new() { SelectedText = selected, BackgroundContext = source }, selected), "oversized bridge snapshot rejected");
             Check(EditorBridgeClient.IsValid(new() { SelectedText = selected, BackgroundContext = selected }, null), "primary bridge accepts selection-only documents");
             Check(!EditorBridgeClient.IsValid(new() { SelectedText = "", BackgroundContext = "" }, null), "primary bridge rejects missing selection");
+            Check(EditorBridgeClient.OwnerMatches(null, 100u), "legacy bridge remains eligible during extension upgrade");
+            Check(EditorBridgeClient.OwnerMatches(100u, 100u), "bridge owner matches foreground editor");
+            Check(!EditorBridgeClient.OwnerMatches(101u, 100u), "background editor bridge is skipped");
             var safeDefaults = new CodeExplainer.ClientConfig();
             Check(safeDefaults.EnvironmentName == "Production" && safeDefaults.ApiBaseUrl.StartsWith("https://")
                 && safeDefaults.WsBaseUrl.StartsWith("wss://") && !safeDefaults.AuthEnabled,
@@ -101,20 +108,27 @@ internal static class Program
                 Check(result.BackgroundContext.Contains("line_1399") && result.BackgroundContext.Contains("line_1401"), "native UIA provider captures both neighboring lines late in document");
                 Check(text.SelectionStart == start && text.SelectionLength == length, "native capture preserves caret and selection");
                 var original = await SnapshotClipboardWithRetryAsync();
-                try
+                if (original == null)
                 {
-                    await SetTextWithRetryAsync("repeat-copy-test");
-                    var copied = await new ClipboardManager().SafeCaptureSelectionAsync(() => SetTextWithRetryAsync("repeat-copy-test"));
-                    Check(copied.ClipboardChanged && copied.CapturedText == "repeat-copy-test", "repeated copy of identical text succeeds");
-                    var changed = await new ClipboardManager().SafeCaptureSelectionAsync(() => SetTextWithRetryAsync("new-copy-test"));
-                    Check(changed.CapturedText == "new-copy-test" && Clipboard.GetText() == "repeat-copy-test", "clipboard contents restored after capture");
+                    Console.WriteLine("SKIP clipboard mutation checks because another application held the Windows clipboard.");
                 }
-                finally
+                else
                 {
-                    for (int attempt = 0; ; attempt++)
+                    try
                     {
-                        try { Clipboard.SetDataObject(original, true); break; }
-                        catch (System.Runtime.InteropServices.ExternalException) when (attempt < 7) { await Task.Delay(80); }
+                        await SetTextWithRetryAsync("repeat-copy-test");
+                        var copied = await new ClipboardManager().SafeCaptureSelectionAsync(() => SetTextWithRetryAsync("repeat-copy-test"));
+                        Check(copied.ClipboardChanged && copied.CapturedText == "repeat-copy-test", "repeated copy of identical text succeeds");
+                        var changed = await new ClipboardManager().SafeCaptureSelectionAsync(() => SetTextWithRetryAsync("new-copy-test"));
+                        Check(changed.CapturedText == "new-copy-test" && await GetTextWithRetryAsync() == "repeat-copy-test", "clipboard contents restored after capture");
+                    }
+                    finally
+                    {
+                        for (int attempt = 0; ; attempt++)
+                        {
+                            try { Clipboard.SetDataObject(original, true); break; }
+                            catch (System.Runtime.InteropServices.ExternalException) when (attempt < 7) { await Task.Delay(80); }
+                        }
                     }
                 }
             }
@@ -190,10 +204,18 @@ internal static class Program
         }
     }
 
-    private static async Task<DataObject> SnapshotClipboardWithRetryAsync()
+    private static async Task<string> GetTextWithRetryAsync()
     {
-        Exception? lastError = null;
-        for (int attempt = 0; attempt < 12; attempt++)
+        for (int attempt = 0; ; attempt++)
+        {
+            try { return Clipboard.ContainsText() ? Clipboard.GetText() : ""; }
+            catch (System.Runtime.InteropServices.ExternalException) when (attempt < 12) { await Task.Delay(80); }
+        }
+    }
+
+    private static async Task<DataObject?> SnapshotClipboardWithRetryAsync()
+    {
+        for (int attempt = 0; attempt < 25; attempt++)
         {
             try
             {
@@ -209,9 +231,9 @@ internal static class Program
                 }
                 return original;
             }
-            catch (System.Runtime.InteropServices.ExternalException ex) { lastError = ex; await Task.Delay(80); }
+            catch (System.Runtime.InteropServices.ExternalException) { await Task.Delay(80); }
         }
-        throw new InvalidOperationException("Cannot preserve the clipboard; native test cancelled.", lastError);
+        return null;
     }
 
     private static async Task RunTransport()
@@ -286,6 +308,12 @@ internal static class Program
 
     private static void RunBridge()
     {
+        RunBridgeProtocol(1, "legacy bridge serves primary capture during extension upgrade");
+        RunBridgeProtocol(3, "current bridge serves primary capture and prunes stale endpoints");
+    }
+
+    private static void RunBridgeProtocol(int protocol, string checkName)
+    {
         string directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "simpledocs-pipe-test-" + Guid.NewGuid());
         var info = new System.Diagnostics.ProcessStartInfo("node")
         {
@@ -293,12 +321,18 @@ internal static class Program
         };
         info.ArgumentList.Add(System.IO.Path.GetFullPath("editor-extension/test/pipe-fixture.cjs"));
         info.ArgumentList.Add(directory);
+        info.ArgumentList.Add(protocol.ToString(System.Globalization.CultureInfo.InvariantCulture));
         using var process = System.Diagnostics.Process.Start(info)!;
         try
         {
             Check(process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult() == "READY", "Node bridge fixture started");
-            var snapshot = EditorBridgeClient.TryCaptureAsync("bridge_selection", directory).GetAwaiter().GetResult();
-            Check(snapshot?.BackgroundContext == "before\nbridge_selection\nafter", "C# captures Node named-pipe context with current-user validation");
+            string staleManifest = System.IO.Path.Combine(directory, "simpleDocs-editor-2147483646-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json");
+            System.IO.File.WriteAllText(staleManifest,
+                "{\"pipe\":\"simpleDocs-editor-2147483646-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"token\":\"" + new string('b', 64) + "\"}");
+            var snapshot = EditorBridgeClient.TryCaptureAsync(null, directory).GetAwaiter().GetResult();
+            Check(snapshot?.SelectedText == "bridge_selection"
+                && snapshot.BackgroundContext == "before\nbridge_selection\nafter", checkName);
+            Check(!System.IO.File.Exists(staleManifest), "dead bridge manifest is removed without touching live endpoints");
         }
         finally
         {

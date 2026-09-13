@@ -357,7 +357,7 @@ namespace CodeExplainer
                 RuntimeLog.Warn("Overlay", $"req={requestId} {captureResult.StatusMessage}");
                 _overlayWindow?.ShowMessage(
                     captureResult.Type == EnvironmentType.IDE
-                        ? "Use the editor's right-click menu: simpleDocs: Explain Selection, or press Ctrl+Alt+D. If that command is missing, install simpleDocs Context and run Developer: Reload Window."
+                        ? "Keep one selection highlighted and retry. If the extension is updating, let installation finish. You can also use the editor's right-click simpleDocs: Explain Selection command or press Ctrl+Alt+D."
                         : "Select text in the application and press Ctrl+Shift+Space. This application may not expose its selection to Windows.",
                     "Selection unavailable");
             }
