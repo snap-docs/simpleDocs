@@ -34,9 +34,6 @@ if (Test-Path $outputDir) {
 }
 
 New-Item -ItemType Directory -Path $outputDir | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $outputDir "app") | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $outputDir "docs") | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $outputDir "editor-extension") | Out-Null
 
 foreach ($installerName in @("Install-simpleDocs.cmd", "Install-simpleDocs.ps1")) {
     $installerPath = Join-Path $projectRoot $installerName
@@ -58,14 +55,7 @@ foreach ($fileName in $runtimeFiles) {
         throw "Required client file not found: $sourcePath"
     }
 
-    Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $outputDir "app" $fileName) -Force
-}
-
-if (Test-Path (Join-Path $projectRoot "final-tester-package-guide.md")) {
-    Copy-Item -LiteralPath (Join-Path $projectRoot "final-tester-package-guide.md") -Destination (Join-Path $outputDir "docs\final-tester-package-guide.md") -Force
-}
-if (Test-Path (Join-Path $projectRoot "chatgpt-tester-plan-prompt.md")) {
-    Copy-Item -LiteralPath (Join-Path $projectRoot "chatgpt-tester-plan-prompt.md") -Destination (Join-Path $outputDir "docs\chatgpt-tester-plan-prompt.md") -Force
+    Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $outputDir $fileName) -Force
 }
 
 foreach ($manualName in @("simpleDocs-user-manual.pdf", "simpleDocs-user-manual.txt")) {
@@ -73,32 +63,7 @@ foreach ($manualName in @("simpleDocs-user-manual.pdf", "simpleDocs-user-manual.
     if (-not (Test-Path $manualPath)) {
         throw "Required user manual is missing: $manualPath"
     }
-    Copy-Item -LiteralPath $manualPath -Destination (Join-Path $outputDir "docs\$manualName") -Force
+    Copy-Item -LiteralPath $manualPath -Destination (Join-Path $outputDir $manualName) -Force
 }
-
-$extensionPackage = Get-ChildItem -LiteralPath (Join-Path $projectRoot "dist") -Filter "simpledocs-context-*.vsix" -File -ErrorAction SilentlyContinue |
-    Sort-Object LastWriteTimeUtc -Descending |
-    Select-Object -First 1
-if ($extensionPackage) {
-    Copy-Item -LiteralPath $extensionPackage.FullName -Destination (Join-Path $outputDir "editor-extension" $extensionPackage.Name) -Force
-    Copy-Item -LiteralPath (Join-Path $projectRoot "editor-extension\README.md") -Destination (Join-Path $outputDir "editor-extension\README.md") -Force
-}
-
-$readmePath = Join-Path $outputDir "README-FIRST.txt"
-$readme = @"
-simpleDocs installer package
-
-1. Extract this zip first
-2. Run Install-simpleDocs.cmd
-3. No administrator access, account, or redeem code is required
-4. simpleDocs installs under your Windows user profile and starts immediately
-5. It starts automatically after future Windows sign-ins
-6. Use Ctrl+Shift+Space after selecting text
-7. Startup can be disabled later from the simpleDocs tray menu
-8. VS Code or Cursor users can install the optional VSIX in editor-extension for exact unsaved-buffer context
-
-Environment: $EnvironmentName
-"@
-Set-Content -LiteralPath $readmePath -Value $readme -Encoding ASCII
 
 Write-Host "Tester bundle prepared at $outputDir"

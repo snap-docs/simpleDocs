@@ -85,11 +85,19 @@ jobs:
           $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
           try {
             $entryNames = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\\', '/') })
-            foreach ($requiredManual in @("docs/simpleDocs-user-manual.pdf", "docs/simpleDocs-user-manual.txt")) {
-              if ($requiredManual -notin $entryNames) { throw "Release archive is missing $requiredManual." }
+            $requiredEntries = @(
+              "Install-simpleDocs.cmd",
+              "Install-simpleDocs.ps1",
+              "CodeExplainer.exe",
+              "appsettings.json",
+              "simpleDocs-user-manual.pdf",
+              "simpleDocs-user-manual.txt"
+            )
+            if ($entryNames.Count -ne $requiredEntries.Count) {
+              throw "Release archive must contain exactly $($requiredEntries.Count) files, found $($entryNames.Count)."
             }
-            foreach ($requiredInstaller in @("Install-simpleDocs.cmd", "Install-simpleDocs.ps1")) {
-              if ($requiredInstaller -notin $entryNames) { throw "Release archive is missing $requiredInstaller." }
+            foreach ($requiredEntry in $requiredEntries) {
+              if ($requiredEntry -notin $entryNames) { throw "Release archive is missing $requiredEntry." }
             }
           } finally {
             $archive.Dispose()
