@@ -2,20 +2,16 @@
 
 ## What this package is
 
-This zip is a portable Windows app package for `simpleDocs`.
+This ZIP is a per-user Windows installation package for `simpleDocs`.
 
-It is not a traditional installer.
-
-The tester does not need to install it into `Program Files`.
-
-The tester does not need to install the .NET runtime separately.
-
-They only need to unzip it and run the app.
+It installs into `%LOCALAPPDATA%\Programs\simpleDocs`, so administrator access is not required. The tester does not need to install the .NET runtime separately.
 
 ## What the tester will see after unzipping
 
 After extracting the zip, the folder contains:
 
+- `Install-simpleDocs.cmd`
+- `Install-simpleDocs.ps1`
 - `app\CodeExplainer.exe`
 - `app\appsettings.json`
 - `docs\final-tester-package-guide.md`
@@ -24,14 +20,14 @@ After extracting the zip, the folder contains:
 
 The main file the tester should use is:
 
-`app\CodeExplainer.exe`
+`Install-simpleDocs.cmd`
 
 ## First-time setup for a tester
 
 1. Extract the zip to a normal folder such as `Desktop\simpleDocs` or `Documents\simpleDocs`.
 2. Open the extracted folder.
-3. Open the `app` folder.
-4. Double-click `CodeExplainer.exe`.
+3. Double-click `Install-simpleDocs.cmd`.
+4. Wait for the successful installation message.
 5. If Windows shows a security prompt, choose the option to continue if the tester trusts the app source.
 6. No account, login, or redeem code is required.
 7. Wait until the tray icon shows the app is ready.
@@ -40,11 +36,9 @@ The main file the tester should use is:
 
 The tester can simply:
 
-1. Open the same extracted folder again.
-2. Double-click `app\CodeExplainer.exe`.
-3. Select text in an editor, browser, or terminal.
-4. Press the app hotkey.
-5. Read the overlay response.
+1. Select text in an editor, browser, or terminal.
+2. Press the app hotkey.
+3. Read the overlay response.
 
 By default, `simpleDocs` also starts automatically when the user signs in to Windows.
 
@@ -54,23 +48,21 @@ If they want to turn that off later, they can use the tray icon menu.
 
 No.
 
-They only need to unzip the package once.
-
-After that, they can keep using the same extracted folder and launch `CodeExplainer.exe` whenever they want.
+They only need to extract the package and run the installer once. simpleDocs then starts automatically after Windows sign-in and is available from the Start Menu.
 
 ## What happens when we send a newer version later
 
 If we send a new zip later, the tester should:
 
-1. Close the current app if it is running.
-2. Extract the new zip to a fresh folder, or replace the old extracted folder.
-3. Launch the new `CodeExplainer.exe`.
+1. Extract the new ZIP.
+2. Run `Install-simpleDocs.cmd` again.
+3. The installer stops only the older installed simpleDocs process, replaces it, repairs startup integration, and launches the new version.
 
 No account state needs to be migrated between versions or machines.
 
 ## Best folder recommendation for testers
 
-Tell testers not to run the app from inside the zip viewer.
+Tell testers not to run the installer from inside the ZIP viewer.
 
 They should extract it first.
 
@@ -86,7 +78,7 @@ Avoid temporary download folders if possible.
 
 Use:
 
-`app\CodeExplainer.exe`
+`Install-simpleDocs.cmd`
 
 Do not ask the tester to run terminal commands.
 
@@ -113,4 +105,4 @@ Ask them to report:
 
 ## Recommended message you can send to testers
 
-Extract the zip first, then open `app\CodeExplainer.exe`. No login or redeem code is required. You can keep using the same app folder, and the app starts automatically with Windows by default unless you turn that off from the tray menu.
+Extract the ZIP first, then run `Install-simpleDocs.cmd`. No administrator access, login, or redeem code is required. simpleDocs installs under your Windows profile and starts automatically after Windows sign-in unless you turn that off from the tray menu.

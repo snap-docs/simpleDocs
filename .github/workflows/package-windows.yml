@@ -6,7 +6,7 @@ on:
       version:
         description: Release version shown by the desktop client
         required: false
-        default: 1.4.3-pilot
+        default: 1.4.4-pilot
   push:
     branches:
       - main
@@ -15,6 +15,8 @@ on:
       - editor-extension/**
       - tests/**
       - publish-client.ps1
+      - Install-simpleDocs.cmd
+      - Install-simpleDocs.ps1
       - package-editor-extension.ps1
       - prepare-tester-bundle.ps1
       - release-assets/**
@@ -30,7 +32,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      RELEASE_VERSION: ${{ inputs.version || '1.4.3-pilot' }}
+      RELEASE_VERSION: ${{ inputs.version || '1.4.4-pilot' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +87,9 @@ jobs:
             $entryNames = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\\', '/') })
             foreach ($requiredManual in @("docs/simpleDocs-user-manual.pdf", "docs/simpleDocs-user-manual.txt")) {
               if ($requiredManual -notin $entryNames) { throw "Release archive is missing $requiredManual." }
+            }
+            foreach ($requiredInstaller in @("Install-simpleDocs.cmd", "Install-simpleDocs.ps1")) {
+              if ($requiredInstaller -notin $entryNames) { throw "Release archive is missing $requiredInstaller." }
             }
           } finally {
             $archive.Dispose()

@@ -38,6 +38,14 @@ New-Item -ItemType Directory -Path (Join-Path $outputDir "app") | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $outputDir "docs") | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $outputDir "editor-extension") | Out-Null
 
+foreach ($installerName in @("Install-simpleDocs.cmd", "Install-simpleDocs.ps1")) {
+    $installerPath = Join-Path $projectRoot $installerName
+    if (-not (Test-Path $installerPath)) {
+        throw "Required installer file not found: $installerPath"
+    }
+    Copy-Item -LiteralPath $installerPath -Destination (Join-Path $outputDir $installerName) -Force
+}
+
 # Copy only the files testers actually need to run the app.
 $runtimeFiles = @(
     "CodeExplainer.exe",
@@ -78,15 +86,16 @@ if ($extensionPackage) {
 
 $readmePath = Join-Path $outputDir "README-FIRST.txt"
 $readme = @"
-simpleDocs tester bundle
+simpleDocs installer package
 
 1. Extract this zip first
-2. Open the app folder
-3. Run CodeExplainer.exe
-4. No account or redeem code is required
-5. Use the configured hotkey inside your normal workflow
-6. The app starts with Windows by default and can be changed from the tray menu
-7. VS Code or Cursor users can install the optional VSIX in editor-extension for exact unsaved-buffer context
+2. Run Install-simpleDocs.cmd
+3. No administrator access, account, or redeem code is required
+4. simpleDocs installs under your Windows user profile and starts immediately
+5. It starts automatically after future Windows sign-ins
+6. Use Ctrl+Shift+Space after selecting text
+7. Startup can be disabled later from the simpleDocs tray menu
+8. VS Code or Cursor users can install the optional VSIX in editor-extension for exact unsaved-buffer context
 
 Environment: $EnvironmentName
 "@
